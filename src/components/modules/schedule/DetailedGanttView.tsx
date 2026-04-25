@@ -5,9 +5,25 @@ import {
   ChevronDown,
   ChevronRight,
   FileUp,
+  GripVertical,
   Plus,
   Trash2,
 } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { canEdit, useRole } from "@/lib/role-context";
 import {
   STATUS_DOT,
@@ -35,6 +51,18 @@ const STATUS_OPTIONS: ScheduleStatus[] = [
   "delayed",
 ];
 
+type Handlers = {
+  editable: boolean;
+  onUpdatePhase: (id: string, patch: PhasePatch) => Promise<void>;
+  onUpdateTask: (id: string, patch: TaskPatch) => Promise<void>;
+  onUpdateSubtask: (id: string, patch: SubtaskPatch) => Promise<void>;
+  onAddTask: (phaseId: string) => Promise<void>;
+  onAddSubtask: (taskId: string) => Promise<void>;
+  onDeletePhase: (id: string) => Promise<void>;
+  onDeleteTask: (id: string) => Promise<void>;
+  onDeleteSubtask: (id: string) => Promise<void>;
+};
+
 export function DetailedGanttView({
   phases,
   tasks,
@@ -48,6 +76,7 @@ export function DetailedGanttView({
   onDeletePhase,
   onDeleteTask,
   onDeleteSubtask,
+  onReorderPhases,
 }: {
   phases: SchedulePhase[];
   tasks: ScheduleTask[];
@@ -61,6 +90,7 @@ export function DetailedGanttView({
   onDeletePhase: (id: string) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
   onDeleteSubtask: (id: string) => Promise<void>;
+  onReorderPhases: (reordered: SchedulePhase[]) => Promise<void>;
 }) {
   const role = useRole();
   const editable = canEdit(role);
@@ -69,7 +99,16 @@ export function DetailedGanttView({
     () => new Set(phases.map((p) => p.id)),
   );
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(
-    () => new Set(tasks.filter((t) => subtasks.some((s) => s.task_id === t.id)).map((t) => t.id)),
+    () =>
+      new Set(
+        tasks
+          .filter((t) => subtasks.some((s) => s.task_id === t.id))
+          .map((t) => t.id),
+      ),
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
   function togglePhase(id: string) {
@@ -89,6 +128,27 @@ export function DetailedGanttView({
       return next;
     });
   }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = phases.findIndex((p) => p.id === active.id);
+    const newIndex = phases.findIndex((p) => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    onReorderPhases(arrayMove(phases, oldIndex, newIndex));
+  }
+
+  const handlers: Handlers = {
+    editable,
+    onUpdatePhase,
+    onUpdateTask,
+    onUpdateSubtask,
+    onAddTask,
+    onAddSubtask,
+    onDeletePhase,
+    onDeleteTask,
+    onDeleteSubtask,
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -111,296 +171,97 @@ export function DetailedGanttView({
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-md border border-zinc-800">
-        <table className="w-full min-w-[820px] text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
-              <th className="px-3 py-2 font-medium">Name</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 font-medium">Start</th>
-              <th className="px-3 py-2 font-medium">End</th>
-              <th className="px-3 py-2 font-medium">Notes</th>
-              <th className="w-8 px-2 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {phases.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-3 py-4 text-zinc-500">
-                  No phases yet.
-                </td>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="overflow-x-auto rounded-md border border-zinc-800">
+          <table className="w-full min-w-[820px] text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
+                <th className="px-3 py-2 font-medium">Name</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Start</th>
+                <th className="px-3 py-2 font-medium">End</th>
+                <th className="px-3 py-2 font-medium">Notes</th>
+                <th className="w-8 px-2 py-2"></th>
               </tr>
-            )}
-            {phases.map((phase) => {
-              const phaseTasks = tasks.filter((t) => t.phase_id === phase.id);
-              const phaseOpen = expandedPhases.has(phase.id);
-              return (
-                <Fragment key={phase.id}>
-                  <tr className="group border-b border-zinc-800 bg-zinc-900/40">
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => togglePhase(phase.id)}
-                          className="text-zinc-500 hover:text-zinc-200"
-                          aria-label={phaseOpen ? "Collapse" : "Expand"}
-                        >
-                          {phaseOpen ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </button>
-                        <EditableText
-                          value={phase.name}
-                          editable={editable}
-                          onCommit={(v) => onUpdatePhase(phase.id, { name: v })}
-                          className="font-medium text-zinc-100"
-                        />
-                        <span className="text-xs font-normal text-zinc-500">
-                          ({phaseTasks.length})
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <StatusCell
-                        value={phase.status}
-                        editable={editable}
-                        onChange={(s) => onUpdatePhase(phase.id, { status: s })}
+            </thead>
+            <tbody>
+              {phases.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-4 text-zinc-500">
+                    No phases yet.
+                  </td>
+                </tr>
+              )}
+              <SortableContext
+                items={phases.map((p) => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {phases.map((phase) => {
+                  const phaseTasks = tasks.filter(
+                    (t) => t.phase_id === phase.id,
+                  );
+                  const phaseOpen = expandedPhases.has(phase.id);
+                  return (
+                    <Fragment key={phase.id}>
+                      <SortablePhaseRow
+                        phase={phase}
+                        taskCount={phaseTasks.length}
+                        phaseOpen={phaseOpen}
+                        onToggle={() => togglePhase(phase.id)}
+                        handlers={handlers}
                       />
-                    </td>
-                    <td className="px-3 py-2">
-                      <DateCell
-                        value={phase.start_date}
-                        editable={editable}
-                        onCommit={(v) =>
-                          onUpdatePhase(phase.id, { start_date: v })
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <DateCell
-                        value={phase.end_date}
-                        editable={editable}
-                        onCommit={(v) =>
-                          onUpdatePhase(phase.id, { end_date: v })
-                        }
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <EditableText
-                        value={phase.notes ?? ""}
-                        editable={editable}
-                        placeholder="—"
-                        onCommit={(v) =>
-                          onUpdatePhase(phase.id, { notes: v || null })
-                        }
-                        className="text-zinc-300"
-                      />
-                    </td>
-                    <td className="w-8 px-2 py-2 text-right">
-                      {editable && (
-                        <RowDeleteButton
-                          label="Delete phase and all its tasks"
-                          onClick={() => onDeletePhase(phase.id)}
-                        />
-                      )}
-                    </td>
-                  </tr>
-                  {phaseOpen &&
-                    phaseTasks.map((task) => {
-                      const taskSubtasks = subtasks.filter(
-                        (s) => s.task_id === task.id,
-                      );
-                      const taskOpen = expandedTasks.has(task.id);
-                      return (
-                        <Fragment key={task.id}>
-                          <tr className="group border-b border-zinc-900 hover:bg-zinc-900/40">
-                            <td className="px-3 py-2 pl-6">
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleTask(task.id)}
-                                  className="text-zinc-500 hover:text-zinc-200"
-                                  aria-label={taskOpen ? "Collapse" : "Expand"}
-                                >
-                                  {taskOpen ? (
-                                    <ChevronDown className="h-4 w-4" />
-                                  ) : (
-                                    <ChevronRight className="h-4 w-4" />
-                                  )}
-                                </button>
-                                <EditableText
-                                  value={task.name}
-                                  editable={editable}
-                                  onCommit={(v) =>
-                                    onUpdateTask(task.id, { name: v })
-                                  }
-                                  className="text-zinc-200"
-                                />
-                                {taskSubtasks.length > 0 && (
-                                  <span className="text-xs font-normal text-zinc-500">
-                                    ({taskSubtasks.length})
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <StatusCell
-                                value={task.status}
-                                editable={editable}
-                                onChange={(s) =>
-                                  onUpdateTask(task.id, { status: s })
-                                }
+                      {phaseOpen &&
+                        phaseTasks.map((task) => {
+                          const taskSubtasks = subtasks.filter(
+                            (s) => s.task_id === task.id,
+                          );
+                          const taskOpen = expandedTasks.has(task.id);
+                          return (
+                            <Fragment key={task.id}>
+                              <TaskRow
+                                task={task}
+                                subtaskCount={taskSubtasks.length}
+                                taskOpen={taskOpen}
+                                onToggle={() => toggleTask(task.id)}
+                                handlers={handlers}
                               />
-                            </td>
-                            <td className="px-3 py-2">
-                              <DateCell
-                                value={task.start_date}
-                                editable={editable}
-                                onCommit={(v) =>
-                                  onUpdateTask(task.id, { start_date: v })
-                                }
-                              />
-                            </td>
-                            <td className="px-3 py-2">
-                              <DateCell
-                                value={task.end_date}
-                                editable={editable}
-                                onCommit={(v) =>
-                                  onUpdateTask(task.id, { end_date: v })
-                                }
-                              />
-                            </td>
-                            <td className="px-3 py-2">
-                              <EditableText
-                                value={task.notes ?? ""}
-                                editable={editable}
-                                placeholder="—"
-                                onCommit={(v) =>
-                                  onUpdateTask(task.id, { notes: v || null })
-                                }
-                                className="text-zinc-300"
-                              />
-                            </td>
-                            <td className="w-8 px-2 py-2 text-right">
-                              {editable && (
-                                <RowDeleteButton
-                                  label="Delete task and all its subtasks"
-                                  onClick={() => onDeleteTask(task.id)}
+                              {taskOpen &&
+                                taskSubtasks.map((subtask) => (
+                                  <SubtaskRow
+                                    key={subtask.id}
+                                    subtask={subtask}
+                                    handlers={handlers}
+                                  />
+                                ))}
+                              {taskOpen && editable && (
+                                <AddRow
+                                  pl="pl-16"
+                                  label="Add subtask"
+                                  onAdd={() => onAddSubtask(task.id)}
                                 />
                               )}
-                            </td>
-                          </tr>
-                          {taskOpen &&
-                            taskSubtasks.map((subtask) => (
-                              <tr
-                                key={subtask.id}
-                                className="group border-b border-zinc-900/60 hover:bg-zinc-900/40"
-                              >
-                                <td className="px-3 py-2 pl-16">
-                                  <EditableText
-                                    value={subtask.name}
-                                    editable={editable}
-                                    onCommit={(v) =>
-                                      onUpdateSubtask(subtask.id, { name: v })
-                                    }
-                                    className="text-zinc-300"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <StatusCell
-                                    value={subtask.status}
-                                    editable={editable}
-                                    onChange={(s) =>
-                                      onUpdateSubtask(subtask.id, { status: s })
-                                    }
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <DateCell
-                                    value={subtask.start_date}
-                                    editable={editable}
-                                    onCommit={(v) =>
-                                      onUpdateSubtask(subtask.id, {
-                                        start_date: v,
-                                      })
-                                    }
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <DateCell
-                                    value={subtask.end_date}
-                                    editable={editable}
-                                    onCommit={(v) =>
-                                      onUpdateSubtask(subtask.id, {
-                                        end_date: v,
-                                      })
-                                    }
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <EditableText
-                                    value={subtask.notes ?? ""}
-                                    editable={editable}
-                                    placeholder="—"
-                                    onCommit={(v) =>
-                                      onUpdateSubtask(subtask.id, {
-                                        notes: v || null,
-                                      })
-                                    }
-                                    className="text-zinc-400"
-                                  />
-                                </td>
-                                <td className="w-8 px-2 py-2 text-right">
-                                  {editable && (
-                                    <RowDeleteButton
-                                      label="Delete subtask"
-                                      onClick={() =>
-                                        onDeleteSubtask(subtask.id)
-                                      }
-                                    />
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          {taskOpen && editable && (
-                            <tr className="border-b border-zinc-900/60">
-                              <td colSpan={6} className="px-3 py-1 pl-16">
-                                <button
-                                  type="button"
-                                  onClick={() => onAddSubtask(task.id)}
-                                  className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-blue-400"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  Add subtask
-                                </button>
-                              </td>
-                            </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  {phaseOpen && editable && (
-                    <tr className="border-b border-zinc-900">
-                      <td colSpan={6} className="px-3 py-1 pl-10">
-                        <button
-                          type="button"
-                          onClick={() => onAddTask(phase.id)}
-                          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-blue-400"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                          Add task
-                        </button>
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                            </Fragment>
+                          );
+                        })}
+                      {phaseOpen && editable && (
+                        <AddRow
+                          pl="pl-10"
+                          label="Add task"
+                          onAdd={() => onAddTask(phase.id)}
+                        />
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </SortableContext>
+            </tbody>
+          </table>
+        </div>
+      </DndContext>
 
       {editable && (
         <button
@@ -413,6 +274,301 @@ export function DetailedGanttView({
         </button>
       )}
     </div>
+  );
+}
+
+function SortablePhaseRow({
+  phase,
+  taskCount,
+  phaseOpen,
+  onToggle,
+  handlers,
+}: {
+  phase: SchedulePhase;
+  taskCount: number;
+  phaseOpen: boolean;
+  onToggle: () => void;
+  handlers: Handlers;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: phase.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    position: "relative",
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  const { editable } = handlers;
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className="group border-b border-zinc-800 bg-zinc-900/40"
+    >
+      <td className="px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          {editable && (
+            <button
+              type="button"
+              {...attributes}
+              {...listeners}
+              className="cursor-grab text-zinc-600 hover:text-zinc-300 active:cursor-grabbing"
+              aria-label="Drag to reorder phase"
+              title="Drag to reorder"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onToggle}
+            className="text-zinc-500 hover:text-zinc-200"
+            aria-label={phaseOpen ? "Collapse" : "Expand"}
+          >
+            {phaseOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </button>
+          <EditableText
+            value={phase.name}
+            editable={editable}
+            onCommit={(v) => handlers.onUpdatePhase(phase.id, { name: v })}
+            className="font-medium text-zinc-100"
+          />
+          <span className="text-xs font-normal text-zinc-500">
+            ({taskCount})
+          </span>
+        </div>
+      </td>
+      <td className="px-3 py-2">
+        <StatusCell
+          value={phase.status}
+          editable={editable}
+          onChange={(s) => handlers.onUpdatePhase(phase.id, { status: s })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <DateCell
+          value={phase.start_date}
+          editable={editable}
+          onCommit={(v) => handlers.onUpdatePhase(phase.id, { start_date: v })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <DateCell
+          value={phase.end_date}
+          editable={editable}
+          onCommit={(v) => handlers.onUpdatePhase(phase.id, { end_date: v })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <EditableText
+          value={phase.notes ?? ""}
+          editable={editable}
+          placeholder="—"
+          onCommit={(v) =>
+            handlers.onUpdatePhase(phase.id, { notes: v || null })
+          }
+          className="text-zinc-300"
+        />
+      </td>
+      <td className="w-8 px-2 py-2 text-right">
+        {editable && (
+          <RowDeleteButton
+            label="Delete phase and all its tasks"
+            onClick={() => handlers.onDeletePhase(phase.id)}
+          />
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function TaskRow({
+  task,
+  subtaskCount,
+  taskOpen,
+  onToggle,
+  handlers,
+}: {
+  task: ScheduleTask;
+  subtaskCount: number;
+  taskOpen: boolean;
+  onToggle: () => void;
+  handlers: Handlers;
+}) {
+  const { editable } = handlers;
+  return (
+    <tr className="group border-b border-zinc-900 hover:bg-zinc-900/40">
+      <td className="px-3 py-2 pl-6">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="text-zinc-500 hover:text-zinc-200"
+            aria-label={taskOpen ? "Collapse" : "Expand"}
+          >
+            {taskOpen ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </button>
+          <EditableText
+            value={task.name}
+            editable={editable}
+            onCommit={(v) => handlers.onUpdateTask(task.id, { name: v })}
+            className="text-zinc-200"
+          />
+          {subtaskCount > 0 && (
+            <span className="text-xs font-normal text-zinc-500">
+              ({subtaskCount})
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-3 py-2">
+        <StatusCell
+          value={task.status}
+          editable={editable}
+          onChange={(s) => handlers.onUpdateTask(task.id, { status: s })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <DateCell
+          value={task.start_date}
+          editable={editable}
+          onCommit={(v) => handlers.onUpdateTask(task.id, { start_date: v })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <DateCell
+          value={task.end_date}
+          editable={editable}
+          onCommit={(v) => handlers.onUpdateTask(task.id, { end_date: v })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <EditableText
+          value={task.notes ?? ""}
+          editable={editable}
+          placeholder="—"
+          onCommit={(v) => handlers.onUpdateTask(task.id, { notes: v || null })}
+          className="text-zinc-300"
+        />
+      </td>
+      <td className="w-8 px-2 py-2 text-right">
+        {editable && (
+          <RowDeleteButton
+            label="Delete task and all its subtasks"
+            onClick={() => handlers.onDeleteTask(task.id)}
+          />
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function SubtaskRow({
+  subtask,
+  handlers,
+}: {
+  subtask: ScheduleSubtask;
+  handlers: Handlers;
+}) {
+  const { editable } = handlers;
+  return (
+    <tr className="group border-b border-zinc-900/60 hover:bg-zinc-900/40">
+      <td className="px-3 py-2 pl-16">
+        <EditableText
+          value={subtask.name}
+          editable={editable}
+          onCommit={(v) => handlers.onUpdateSubtask(subtask.id, { name: v })}
+          className="text-zinc-300"
+        />
+      </td>
+      <td className="px-3 py-2">
+        <StatusCell
+          value={subtask.status}
+          editable={editable}
+          onChange={(s) => handlers.onUpdateSubtask(subtask.id, { status: s })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <DateCell
+          value={subtask.start_date}
+          editable={editable}
+          onCommit={(v) =>
+            handlers.onUpdateSubtask(subtask.id, { start_date: v })
+          }
+        />
+      </td>
+      <td className="px-3 py-2">
+        <DateCell
+          value={subtask.end_date}
+          editable={editable}
+          onCommit={(v) =>
+            handlers.onUpdateSubtask(subtask.id, { end_date: v })
+          }
+        />
+      </td>
+      <td className="px-3 py-2">
+        <EditableText
+          value={subtask.notes ?? ""}
+          editable={editable}
+          placeholder="—"
+          onCommit={(v) =>
+            handlers.onUpdateSubtask(subtask.id, { notes: v || null })
+          }
+          className="text-zinc-400"
+        />
+      </td>
+      <td className="w-8 px-2 py-2 text-right">
+        {editable && (
+          <RowDeleteButton
+            label="Delete subtask"
+            onClick={() => handlers.onDeleteSubtask(subtask.id)}
+          />
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function AddRow({
+  pl,
+  label,
+  onAdd,
+}: {
+  pl: string;
+  label: string;
+  onAdd: () => void;
+}) {
+  return (
+    <tr className="border-b border-zinc-900/60">
+      <td colSpan={6} className={`px-3 py-1 ${pl}`}>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-blue-400"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {label}
+        </button>
+      </td>
+    </tr>
   );
 }
 

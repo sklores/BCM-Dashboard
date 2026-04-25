@@ -139,6 +139,17 @@ export async function createSubtask(
   return data as ScheduleSubtask;
 }
 
+export async function updatePhaseSortOrder(
+  id: string,
+  sortOrder: number,
+): Promise<void> {
+  const { error } = await supabase
+    .from("schedule_phases")
+    .update({ sort_order: sortOrder })
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function deletePhase(id: string): Promise<void> {
   const { error } = await supabase
     .from("schedule_phases")

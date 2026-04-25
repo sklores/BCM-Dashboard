@@ -15,6 +15,7 @@ import {
   fetchSubtasks,
   fetchTasks,
   updatePhase,
+  updatePhaseSortOrder,
   updateSubtask,
   updateTask,
   type PhasePatch,
@@ -153,6 +154,22 @@ export function ScheduleModule({ projectId }: ModuleProps) {
     }
   }
 
+  async function handleReorderPhases(reordered: SchedulePhase[]) {
+    const prev = phases;
+    const renumbered = reordered.map((p, i) => ({ ...p, sort_order: i }));
+    setPhases(renumbered);
+
+    const changed = renumbered.filter((p, i) => prev[i]?.id !== p.id);
+    try {
+      await Promise.all(
+        changed.map((p) => updatePhaseSortOrder(p.id, p.sort_order)),
+      );
+    } catch (err) {
+      setPhases(prev);
+      setError(err instanceof Error ? err.message : "Failed to reorder phases");
+    }
+  }
+
   async function handleDeletePhase(id: string) {
     const prevPhases = phases;
     const prevTasks = tasks;
@@ -227,6 +244,7 @@ export function ScheduleModule({ projectId }: ModuleProps) {
               onDeletePhase={handleDeletePhase}
               onDeleteTask={handleDeleteTask}
               onDeleteSubtask={handleDeleteSubtask}
+              onReorderPhases={handleReorderPhases}
             />
           )}
           {view === "milestone" && <MilestoneView milestones={milestones} />}
