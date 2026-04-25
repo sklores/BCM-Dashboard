@@ -30,7 +30,8 @@ import {
   type SubtaskPatch,
   type TaskPatch,
 } from "./queries";
-import { SimpleGanttView } from "./SimpleGanttView";
+import { GanttView } from "./GanttView";
+import { CalendarView } from "./CalendarView";
 import { DetailedGanttView } from "./DetailedGanttView";
 import { MilestoneView } from "./MilestoneView";
 import type {
@@ -46,13 +47,14 @@ import type {
 } from "./types";
 
 const VIEWS: { key: ScheduleView; label: string }[] = [
-  { key: "simple", label: "Simple Gantt" },
-  { key: "detailed", label: "Detailed Gantt" },
+  { key: "detailed", label: "Detailed" },
+  { key: "gantt", label: "Gantt" },
+  { key: "calendar", label: "Calendar" },
   { key: "milestone", label: "Milestone" },
 ];
 
 export function ScheduleModule({ projectId }: ModuleProps) {
-  const [view, setView] = useState<ScheduleView>("simple");
+  const [view, setView] = useState<ScheduleView>("detailed");
   const [phases, setPhases] = useState<SchedulePhase[]>([]);
   const [tasks, setTasks] = useState<ScheduleTask[]>([]);
   const [subtasks, setSubtasks] = useState<ScheduleSubtask[]>([]);
@@ -309,7 +311,12 @@ export function ScheduleModule({ projectId }: ModuleProps) {
 
       {!loading && !error && (
         <>
-          {view === "simple" && <SimpleGanttView phases={phases} />}
+          {view === "gantt" && (
+            <GanttView phases={phases} tasks={tasks} subtasks={subtasks} />
+          )}
+          {view === "calendar" && (
+            <CalendarView phases={phases} tasks={tasks} />
+          )}
           {view === "detailed" && (
             <DetailedGanttView
               phases={phases}

@@ -71,7 +71,7 @@ export type ScheduleMilestone = {
   sort_order: number;
 };
 
-export type ScheduleView = "simple" | "detailed" | "milestone";
+export type ScheduleView = "gantt" | "detailed" | "calendar" | "milestone";
 
 export const STATUS_LABEL: Record<ScheduleStatus, string> = {
   not_started: "Not Started",
