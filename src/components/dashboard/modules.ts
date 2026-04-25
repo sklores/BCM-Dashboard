@@ -16,6 +16,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
+import { SubsModule } from "@/components/modules/subs/SubsModule";
+import { TeamModule } from "@/components/modules/team/TeamModule";
+import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
 
 export type ModuleProps = {
@@ -33,9 +36,9 @@ export type ModuleDef = {
 
 export const modules: ModuleDef[] = [
   { key: "reports",   label: "Reports",   icon: FileText,     Component: PlaceholderModule },
-  { key: "materials", label: "Materials", icon: Package,      Component: PlaceholderModule },
-  { key: "subs",      label: "Subs",      icon: HardHat,      Component: PlaceholderModule },
-  { key: "team",      label: "Team",      icon: Users,        Component: PlaceholderModule },
+  { key: "materials", label: "Materials", icon: Package,      Component: MaterialsModule  },
+  { key: "subs",      label: "Subs",      icon: HardHat,      Component: SubsModule       },
+  { key: "team",      label: "Team",      icon: Users,        Component: TeamModule       },
   { key: "tasks",     label: "Tasks",     icon: ListChecks,   Component: PlaceholderModule },
   { key: "photos",    label: "Photos",    icon: ImageIcon,    Component: PlaceholderModule },
   { key: "budget",    label: "Budget",    icon: DollarSign,   Component: PlaceholderModule },
