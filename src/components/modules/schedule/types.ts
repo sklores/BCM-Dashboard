@@ -28,6 +28,17 @@ export type ScheduleTask = {
   sort_order: number;
 };
 
+export type ScheduleSubtask = {
+  id: string;
+  task_id: string;
+  name: string;
+  status: ScheduleStatus;
+  start_date: string | null;
+  end_date: string | null;
+  notes: string | null;
+  sort_order: number;
+};
+
 export type ScheduleMilestone = {
   id: string;
   project_id: string;
