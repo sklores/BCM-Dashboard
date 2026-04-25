@@ -9,7 +9,7 @@ type Props = {
 
 export function Sidebar({ activeModule, onModuleChange }: Props) {
   return (
-    <nav className="flex w-56 shrink-0 flex-col gap-0.5 border-l border-zinc-800 bg-zinc-900 p-2">
+    <nav className="flex w-56 shrink-0 flex-col gap-0.5 border-r border-zinc-800 bg-zinc-900 p-2">
       {modules.map((m) => {
         const Icon = m.icon;
         const active = m.key === activeModule;
