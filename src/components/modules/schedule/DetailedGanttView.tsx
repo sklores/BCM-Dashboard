@@ -261,7 +261,7 @@ function EditableText({
           e.currentTarget.blur();
         }
       }}
-      className={`w-full bg-transparent outline-none placeholder:text-zinc-600 focus:rounded focus:bg-zinc-800 focus:px-2 focus:py-0.5 focus:ring-1 focus:ring-blue-500 ${className}`}
+      className={`w-full cursor-text rounded bg-transparent px-1 py-0.5 outline-none transition placeholder:text-zinc-600 hover:bg-zinc-800/60 focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 ${className}`}
     />
   );
 }
@@ -286,7 +286,7 @@ function DateCell({
         const next = e.target.value || null;
         if (next !== value) onCommit(next);
       }}
-      className="bg-transparent text-zinc-400 outline-none focus:rounded focus:bg-zinc-800 focus:px-2 focus:py-0.5 focus:text-zinc-200 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+      className="cursor-pointer rounded bg-transparent px-1 py-0.5 text-zinc-400 outline-none transition hover:bg-zinc-800/60 focus:bg-zinc-800 focus:text-zinc-200 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
     />
   );
 }
@@ -316,7 +316,7 @@ function StatusCell({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as ScheduleStatus)}
-        className={`appearance-none bg-transparent pr-1 text-xs outline-none focus:rounded focus:bg-zinc-800 focus:px-2 focus:py-0.5 focus:ring-1 focus:ring-blue-500 ${STATUS_TEXT[value]}`}
+        className={`cursor-pointer appearance-none rounded bg-transparent px-1 py-0.5 pr-1 text-xs outline-none transition hover:bg-zinc-800/60 focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 ${STATUS_TEXT[value]}`}
       >
         {STATUS_OPTIONS.map((s) => (
           <option key={s} value={s} className="bg-zinc-900 text-zinc-100">
