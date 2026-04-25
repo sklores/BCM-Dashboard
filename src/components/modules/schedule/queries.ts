@@ -35,3 +35,30 @@ export async function fetchMilestones(
   if (error) throw error;
   return (data ?? []) as ScheduleMilestone[];
 }
+
+export type PhasePatch = Partial<
+  Pick<SchedulePhase, "name" | "status" | "start_date" | "end_date">
+>;
+
+export type TaskPatch = Partial<
+  Pick<
+    ScheduleTask,
+    "name" | "status" | "start_date" | "end_date" | "notes"
+  >
+>;
+
+export async function updatePhase(id: string, patch: PhasePatch): Promise<void> {
+  const { error } = await supabase
+    .from("schedule_phases")
+    .update(patch)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
+  const { error } = await supabase
+    .from("schedule_tasks")
+    .update(patch)
+    .eq("id", id);
+  if (error) throw error;
+}

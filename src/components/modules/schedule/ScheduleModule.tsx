@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import type { ModuleProps } from "@/components/dashboard/modules";
-import { fetchMilestones, fetchPhases, fetchTasks } from "./queries";
+import {
+  fetchMilestones,
+  fetchPhases,
+  fetchTasks,
+  updatePhase,
+  updateTask,
+  type PhasePatch,
+  type TaskPatch,
+} from "./queries";
 import { SimpleGanttView } from "./SimpleGanttView";
 import { DetailedGanttView } from "./DetailedGanttView";
 import { MilestoneView } from "./MilestoneView";
@@ -58,6 +66,32 @@ export function ScheduleModule({ projectId }: ModuleProps) {
     };
   }, [projectId]);
 
+  async function handleUpdatePhase(id: string, patch: PhasePatch) {
+    const prev = phases;
+    setPhases((rows) =>
+      rows.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+    );
+    try {
+      await updatePhase(id, patch);
+    } catch (err) {
+      setPhases(prev);
+      setError(err instanceof Error ? err.message : "Failed to save phase");
+    }
+  }
+
+  async function handleUpdateTask(id: string, patch: TaskPatch) {
+    const prev = tasks;
+    setTasks((rows) =>
+      rows.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+    );
+    try {
+      await updateTask(id, patch);
+    } catch (err) {
+      setTasks(prev);
+      setError(err instanceof Error ? err.message : "Failed to save task");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
@@ -68,15 +102,18 @@ export function ScheduleModule({ projectId }: ModuleProps) {
       <ViewSwitcher value={view} onChange={setView} />
 
       {loading && <p className="text-sm text-zinc-500">Loading…</p>}
-      {error && (
-        <p className="text-sm text-red-400">Error: {error}</p>
-      )}
+      {error && <p className="text-sm text-red-400">Error: {error}</p>}
 
       {!loading && !error && (
         <>
           {view === "simple" && <SimpleGanttView phases={phases} />}
           {view === "detailed" && (
-            <DetailedGanttView phases={phases} tasks={tasks} />
+            <DetailedGanttView
+              phases={phases}
+              tasks={tasks}
+              onUpdatePhase={handleUpdatePhase}
+              onUpdateTask={handleUpdateTask}
+            />
           )}
           {view === "milestone" && <MilestoneView milestones={milestones} />}
         </>
