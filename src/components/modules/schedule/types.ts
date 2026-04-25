@@ -11,6 +11,7 @@ export type SchedulePhase = {
   status: ScheduleStatus;
   start_date: string | null;
   end_date: string | null;
+  notes: string | null;
   sort_order: number;
 };
 

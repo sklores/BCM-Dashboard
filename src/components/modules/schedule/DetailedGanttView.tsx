@@ -1,7 +1,13 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { ChevronDown, ChevronRight, FileUp } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FileUp,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import {
   STATUS_DOT,
@@ -33,11 +39,19 @@ export function DetailedGanttView({
   tasks,
   onUpdatePhase,
   onUpdateTask,
+  onAddPhase,
+  onAddTask,
+  onDeletePhase,
+  onDeleteTask,
 }: {
   phases: SchedulePhase[];
   tasks: ScheduleTask[];
   onUpdatePhase: (id: string, patch: PhasePatch) => Promise<void>;
   onUpdateTask: (id: string, patch: TaskPatch) => Promise<void>;
+  onAddPhase: () => Promise<void>;
+  onAddTask: (phaseId: string) => Promise<void>;
+  onDeletePhase: (id: string) => Promise<void>;
+  onDeleteTask: (id: string) => Promise<void>;
 }) {
   const role = useRole();
   const editable = canEdit(role);
@@ -77,7 +91,7 @@ export function DetailedGanttView({
       )}
 
       <div className="overflow-x-auto rounded-md border border-zinc-800">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[820px] text-sm">
           <thead>
             <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
               <th className="px-3 py-2 font-medium">Name</th>
@@ -85,12 +99,13 @@ export function DetailedGanttView({
               <th className="px-3 py-2 font-medium">Start</th>
               <th className="px-3 py-2 font-medium">End</th>
               <th className="px-3 py-2 font-medium">Notes</th>
+              <th className="w-8 px-2 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {phases.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-4 text-zinc-500">
+                <td colSpan={6} className="px-3 py-4 text-zinc-500">
                   No phases yet.
                 </td>
               </tr>
@@ -100,7 +115,7 @@ export function DetailedGanttView({
               const open = expanded.has(phase.id);
               return (
                 <Fragment key={phase.id}>
-                  <tr className="border-b border-zinc-800 bg-zinc-900/40">
+                  <tr className="group border-b border-zinc-800 bg-zinc-900/40">
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <button
@@ -153,13 +168,31 @@ export function DetailedGanttView({
                         }
                       />
                     </td>
-                    <td className="px-3 py-2 text-zinc-500">—</td>
+                    <td className="px-3 py-2">
+                      <EditableText
+                        value={phase.notes ?? ""}
+                        editable={editable}
+                        placeholder="—"
+                        onCommit={(v) =>
+                          onUpdatePhase(phase.id, { notes: v || null })
+                        }
+                        className="text-zinc-300"
+                      />
+                    </td>
+                    <td className="w-8 px-2 py-2 text-right">
+                      {editable && (
+                        <RowDeleteButton
+                          label="Delete phase and all its tasks"
+                          onClick={() => onDeletePhase(phase.id)}
+                        />
+                      )}
+                    </td>
                   </tr>
                   {open &&
                     phaseTasks.map((task) => (
                       <tr
                         key={task.id}
-                        className="border-b border-zinc-900 hover:bg-zinc-900/40"
+                        className="group border-b border-zinc-900 hover:bg-zinc-900/40"
                       >
                         <td className="px-3 py-2 pl-10">
                           <EditableText
@@ -209,15 +242,71 @@ export function DetailedGanttView({
                             className="text-zinc-300"
                           />
                         </td>
+                        <td className="w-8 px-2 py-2 text-right">
+                          {editable && (
+                            <RowDeleteButton
+                              label="Delete task"
+                              onClick={() => onDeleteTask(task.id)}
+                            />
+                          )}
+                        </td>
                       </tr>
                     ))}
+                  {open && editable && (
+                    <tr className="border-b border-zinc-900">
+                      <td colSpan={6} className="px-3 py-1 pl-10">
+                        <button
+                          type="button"
+                          onClick={() => onAddTask(phase.id)}
+                          className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-blue-400"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add task
+                        </button>
+                      </td>
+                    </tr>
+                  )}
                 </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {editable && (
+        <button
+          type="button"
+          onClick={() => onAddPhase()}
+          className="flex w-fit items-center gap-2 rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+        >
+          <Plus className="h-4 w-4" />
+          Add phase
+        </button>
+      )}
     </div>
+  );
+}
+
+function RowDeleteButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (window.confirm(`${label}?`)) onClick();
+      }}
+      className="rounded p-1 text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100 focus:opacity-100"
+      aria-label={label}
+      title={label}
+    >
+      <Trash2 className="h-3.5 w-3.5" />
+    </button>
   );
 }
 
@@ -239,7 +328,10 @@ function EditableText({
   if (!editable) {
     return (
       <span className={className}>
-        {value || (placeholder ? <span className="text-zinc-500">{placeholder}</span> : null)}
+        {value ||
+          (placeholder ? (
+            <span className="text-zinc-500">{placeholder}</span>
+          ) : null)}
       </span>
     );
   }

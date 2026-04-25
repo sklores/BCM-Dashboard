@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
+  createPhase,
+  createTask,
+  deletePhase,
+  deleteTask,
   fetchMilestones,
   fetchPhases,
   fetchTasks,
@@ -92,6 +96,58 @@ export function ScheduleModule({ projectId }: ModuleProps) {
     }
   }
 
+  async function handleAddPhase() {
+    const sortOrder =
+      phases.length === 0
+        ? 0
+        : Math.max(...phases.map((p) => p.sort_order)) + 1;
+    try {
+      const created = await createPhase(projectId, sortOrder);
+      setPhases((rows) => [...rows, created]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add phase");
+    }
+  }
+
+  async function handleAddTask(phaseId: string) {
+    const phaseTasks = tasks.filter((t) => t.phase_id === phaseId);
+    const sortOrder =
+      phaseTasks.length === 0
+        ? 0
+        : Math.max(...phaseTasks.map((t) => t.sort_order)) + 1;
+    try {
+      const created = await createTask(phaseId, sortOrder);
+      setTasks((rows) => [...rows, created]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add task");
+    }
+  }
+
+  async function handleDeletePhase(id: string) {
+    const prevPhases = phases;
+    const prevTasks = tasks;
+    setPhases((rows) => rows.filter((r) => r.id !== id));
+    setTasks((rows) => rows.filter((r) => r.phase_id !== id));
+    try {
+      await deletePhase(id);
+    } catch (err) {
+      setPhases(prevPhases);
+      setTasks(prevTasks);
+      setError(err instanceof Error ? err.message : "Failed to delete phase");
+    }
+  }
+
+  async function handleDeleteTask(id: string) {
+    const prev = tasks;
+    setTasks((rows) => rows.filter((r) => r.id !== id));
+    try {
+      await deleteTask(id);
+    } catch (err) {
+      setTasks(prev);
+      setError(err instanceof Error ? err.message : "Failed to delete task");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
@@ -113,6 +169,10 @@ export function ScheduleModule({ projectId }: ModuleProps) {
               tasks={tasks}
               onUpdatePhase={handleUpdatePhase}
               onUpdateTask={handleUpdateTask}
+              onAddPhase={handleAddPhase}
+              onAddTask={handleAddTask}
+              onDeletePhase={handleDeletePhase}
+              onDeleteTask={handleDeleteTask}
             />
           )}
           {view === "milestone" && <MilestoneView milestones={milestones} />}
