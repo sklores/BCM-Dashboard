@@ -6,6 +6,7 @@ import {
   ChevronRight,
   FileUp,
   GripVertical,
+  Package,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -29,12 +30,21 @@ import {
   STATUS_DOT,
   STATUS_LABEL,
   STATUS_TEXT,
+  type MaterialCatalogOption,
+  type ProjectSubOption,
+  type ProjectTeamOption,
   type ScheduleStatus,
+  type ScheduleMaterialCard,
   type SchedulePhase,
   type ScheduleSubtask,
   type ScheduleTask,
 } from "./types";
-import type { PhasePatch, SubtaskPatch, TaskPatch } from "./queries";
+import type {
+  MaterialCardPatch,
+  PhasePatch,
+  SubtaskPatch,
+  TaskPatch,
+} from "./queries";
 
 type Zoom = "weekly" | "monthly" | "full";
 
@@ -51,45 +61,67 @@ const STATUS_OPTIONS: ScheduleStatus[] = [
   "delayed",
 ];
 
+const TOTAL_COLS = 8;
+
 type Handlers = {
   editable: boolean;
+  subOptions: ProjectSubOption[];
+  teamOptions: ProjectTeamOption[];
+  materialCatalog: MaterialCatalogOption[];
   onUpdatePhase: (id: string, patch: PhasePatch) => Promise<void>;
   onUpdateTask: (id: string, patch: TaskPatch) => Promise<void>;
   onUpdateSubtask: (id: string, patch: SubtaskPatch) => Promise<void>;
+  onUpdateMaterialCard: (id: string, patch: MaterialCardPatch) => Promise<void>;
   onAddTask: (phaseId: string) => Promise<void>;
   onAddSubtask: (taskId: string) => Promise<void>;
+  onAddMaterialCard: (taskId: string) => Promise<void>;
   onDeletePhase: (id: string) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
   onDeleteSubtask: (id: string) => Promise<void>;
+  onDeleteMaterialCard: (id: string) => Promise<void>;
 };
 
 export function DetailedGanttView({
   phases,
   tasks,
   subtasks,
+  materialCards,
+  subOptions,
+  teamOptions,
+  materialCatalog,
   onUpdatePhase,
   onUpdateTask,
   onUpdateSubtask,
+  onUpdateMaterialCard,
   onAddPhase,
   onAddTask,
   onAddSubtask,
+  onAddMaterialCard,
   onDeletePhase,
   onDeleteTask,
   onDeleteSubtask,
+  onDeleteMaterialCard,
   onReorderPhases,
 }: {
   phases: SchedulePhase[];
   tasks: ScheduleTask[];
   subtasks: ScheduleSubtask[];
+  materialCards: ScheduleMaterialCard[];
+  subOptions: ProjectSubOption[];
+  teamOptions: ProjectTeamOption[];
+  materialCatalog: MaterialCatalogOption[];
   onUpdatePhase: (id: string, patch: PhasePatch) => Promise<void>;
   onUpdateTask: (id: string, patch: TaskPatch) => Promise<void>;
   onUpdateSubtask: (id: string, patch: SubtaskPatch) => Promise<void>;
+  onUpdateMaterialCard: (id: string, patch: MaterialCardPatch) => Promise<void>;
   onAddPhase: () => Promise<void>;
   onAddTask: (phaseId: string) => Promise<void>;
   onAddSubtask: (taskId: string) => Promise<void>;
+  onAddMaterialCard: (taskId: string) => Promise<void>;
   onDeletePhase: (id: string) => Promise<void>;
   onDeleteTask: (id: string) => Promise<void>;
   onDeleteSubtask: (id: string) => Promise<void>;
+  onDeleteMaterialCard: (id: string) => Promise<void>;
   onReorderPhases: (reordered: SchedulePhase[]) => Promise<void>;
 }) {
   const role = useRole();
@@ -102,7 +134,11 @@ export function DetailedGanttView({
     () =>
       new Set(
         tasks
-          .filter((t) => subtasks.some((s) => s.task_id === t.id))
+          .filter(
+            (t) =>
+              subtasks.some((s) => s.task_id === t.id) ||
+              materialCards.some((c) => c.task_id === t.id),
+          )
           .map((t) => t.id),
       ),
   );
@@ -140,14 +176,20 @@ export function DetailedGanttView({
 
   const handlers: Handlers = {
     editable,
+    subOptions,
+    teamOptions,
+    materialCatalog,
     onUpdatePhase,
     onUpdateTask,
     onUpdateSubtask,
+    onUpdateMaterialCard,
     onAddTask,
     onAddSubtask,
+    onAddMaterialCard,
     onDeletePhase,
     onDeleteTask,
     onDeleteSubtask,
+    onDeleteMaterialCard,
   };
 
   return (
@@ -177,11 +219,13 @@ export function DetailedGanttView({
         onDragEnd={handleDragEnd}
       >
         <div className="overflow-x-auto rounded-md border border-zinc-800">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
                 <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Sub</th>
+                <th className="px-3 py-2 font-medium">Team</th>
                 <th className="px-3 py-2 font-medium">Start</th>
                 <th className="px-3 py-2 font-medium">End</th>
                 <th className="px-3 py-2 font-medium">Notes</th>
@@ -191,7 +235,7 @@ export function DetailedGanttView({
             <tbody>
               {phases.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-4 text-zinc-500">
+                  <td colSpan={TOTAL_COLS} className="px-3 py-4 text-zinc-500">
                     No phases yet.
                   </td>
                 </tr>
@@ -219,12 +263,17 @@ export function DetailedGanttView({
                           const taskSubtasks = subtasks.filter(
                             (s) => s.task_id === task.id,
                           );
+                          const taskCards = materialCards.filter(
+                            (c) => c.task_id === task.id,
+                          );
                           const taskOpen = expandedTasks.has(task.id);
+                          const childCount =
+                            taskSubtasks.length + taskCards.length;
                           return (
                             <Fragment key={task.id}>
                               <TaskRow
                                 task={task}
-                                subtaskCount={taskSubtasks.length}
+                                childCount={childCount}
                                 taskOpen={taskOpen}
                                 onToggle={() => toggleTask(task.id)}
                                 handlers={handlers}
@@ -237,12 +286,27 @@ export function DetailedGanttView({
                                     handlers={handlers}
                                   />
                                 ))}
+                              {taskOpen &&
+                                taskCards.map((card) => (
+                                  <MaterialCardRow
+                                    key={card.id}
+                                    card={card}
+                                    handlers={handlers}
+                                  />
+                                ))}
                               {taskOpen && editable && (
-                                <AddRow
-                                  pl="pl-16"
-                                  label="Add subtask"
-                                  onAdd={() => onAddSubtask(task.id)}
-                                />
+                                <>
+                                  <AddRow
+                                    pl="pl-16"
+                                    label="Add subtask"
+                                    onAdd={() => onAddSubtask(task.id)}
+                                  />
+                                  <AddRow
+                                    pl="pl-16"
+                                    label="Add material card"
+                                    onAdd={() => onAddMaterialCard(task.id)}
+                                  />
+                                </>
                               )}
                             </Fragment>
                           );
@@ -359,6 +423,8 @@ function SortablePhaseRow({
           onChange={(s) => handlers.onUpdatePhase(phase.id, { status: s })}
         />
       </td>
+      <td className="px-3 py-2 text-zinc-600">—</td>
+      <td className="px-3 py-2 text-zinc-600">—</td>
       <td className="px-3 py-2">
         <DateCell
           value={phase.start_date}
@@ -398,18 +464,18 @@ function SortablePhaseRow({
 
 function TaskRow({
   task,
-  subtaskCount,
+  childCount,
   taskOpen,
   onToggle,
   handlers,
 }: {
   task: ScheduleTask;
-  subtaskCount: number;
+  childCount: number;
   taskOpen: boolean;
   onToggle: () => void;
   handlers: Handlers;
 }) {
-  const { editable } = handlers;
+  const { editable, subOptions, teamOptions } = handlers;
   return (
     <tr className="group border-b border-zinc-900 hover:bg-zinc-900/40">
       <td className="px-3 py-2 pl-6">
@@ -432,9 +498,9 @@ function TaskRow({
             onCommit={(v) => handlers.onUpdateTask(task.id, { name: v })}
             className="text-zinc-200"
           />
-          {subtaskCount > 0 && (
+          {childCount > 0 && (
             <span className="text-xs font-normal text-zinc-500">
-              ({subtaskCount})
+              ({childCount})
             </span>
           )}
         </div>
@@ -444,6 +510,30 @@ function TaskRow({
           value={task.status}
           editable={editable}
           onChange={(s) => handlers.onUpdateTask(task.id, { status: s })}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <PickerCell
+          value={task.assigned_sub_id}
+          editable={editable}
+          options={subOptions.map((s) => ({ value: s.id, label: s.name }))}
+          onChange={(v) =>
+            handlers.onUpdateTask(task.id, { assigned_sub_id: v })
+          }
+          emptyLabel="— Unassigned —"
+          fallback="No subs on project"
+        />
+      </td>
+      <td className="px-3 py-2">
+        <PickerCell
+          value={task.assigned_user_id}
+          editable={editable}
+          options={teamOptions.map((m) => ({ value: m.user_id, label: m.name }))}
+          onChange={(v) =>
+            handlers.onUpdateTask(task.id, { assigned_user_id: v })
+          }
+          emptyLabel="— Unassigned —"
+          fallback="No team on project"
         />
       </td>
       <td className="px-3 py-2">
@@ -472,7 +562,7 @@ function TaskRow({
       <td className="w-8 px-2 py-2 text-right">
         {editable && (
           <RowDeleteButton
-            label="Delete task and all its subtasks"
+            label="Delete task and all its children"
             onClick={() => handlers.onDeleteTask(task.id)}
           />
         )}
@@ -506,6 +596,8 @@ function SubtaskRow({
           onChange={(s) => handlers.onUpdateSubtask(subtask.id, { status: s })}
         />
       </td>
+      <td className="px-3 py-2 text-zinc-600">—</td>
+      <td className="px-3 py-2 text-zinc-600">—</td>
       <td className="px-3 py-2">
         <DateCell
           value={subtask.start_date}
@@ -547,6 +639,78 @@ function SubtaskRow({
   );
 }
 
+function MaterialCardRow({
+  card,
+  handlers,
+}: {
+  card: ScheduleMaterialCard;
+  handlers: Handlers;
+}) {
+  const { editable, materialCatalog } = handlers;
+  return (
+    <tr className="group border-b border-zinc-900/60 bg-zinc-900/20 hover:bg-zinc-900/50">
+      <td colSpan={TOTAL_COLS - 1} className="px-3 py-2 pl-16">
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-600/10 px-2 py-0.5 text-blue-400">
+            <Package className="h-3 w-3" />
+            Material
+          </span>
+          <PickerCell
+            value={card.material_id}
+            editable={editable}
+            options={materialCatalog.map((m) => ({
+              value: m.id,
+              label: m.product_name,
+            }))}
+            onChange={(v) =>
+              handlers.onUpdateMaterialCard(card.id, { material_id: v })
+            }
+            emptyLabel="— Pick material —"
+            fallback="No materials in catalog"
+            wide
+          />
+          <span className="text-zinc-600">·</span>
+          <span className="text-zinc-500">Instructions:</span>
+          <span className="min-w-[12rem] flex-1">
+            <EditableText
+              value={card.instructions ?? ""}
+              editable={editable}
+              placeholder="—"
+              onCommit={(v) =>
+                handlers.onUpdateMaterialCard(card.id, {
+                  instructions: v || null,
+                })
+              }
+              className="text-zinc-300"
+            />
+          </span>
+          <span className="text-zinc-600">·</span>
+          <span className="text-zinc-500">PDF URL:</span>
+          <span className="min-w-[10rem] flex-1">
+            <EditableText
+              value={card.pdf_url ?? ""}
+              editable={editable}
+              placeholder="—"
+              onCommit={(v) =>
+                handlers.onUpdateMaterialCard(card.id, { pdf_url: v || null })
+              }
+              className="text-zinc-300"
+            />
+          </span>
+        </div>
+      </td>
+      <td className="w-8 px-2 py-2 text-right">
+        {editable && (
+          <RowDeleteButton
+            label="Delete material card"
+            onClick={() => handlers.onDeleteMaterialCard(card.id)}
+          />
+        )}
+      </td>
+    </tr>
+  );
+}
+
 function AddRow({
   pl,
   label,
@@ -558,7 +722,7 @@ function AddRow({
 }) {
   return (
     <tr className="border-b border-zinc-900/60">
-      <td colSpan={6} className={`px-3 py-1 ${pl}`}>
+      <td colSpan={TOTAL_COLS} className={`px-3 py-1 ${pl}`}>
         <button
           type="button"
           onClick={onAdd}
@@ -569,6 +733,53 @@ function AddRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+function PickerCell({
+  value,
+  editable,
+  options,
+  onChange,
+  emptyLabel,
+  fallback,
+  wide = false,
+}: {
+  value: string | null;
+  editable: boolean;
+  options: { value: string; label: string }[];
+  onChange: (next: string | null) => void;
+  emptyLabel: string;
+  fallback: string;
+  wide?: boolean;
+}) {
+  const widthClass = wide ? "min-w-[10rem]" : "max-w-[10rem]";
+  if (!editable) {
+    const match = options.find((o) => o.value === value);
+    return (
+      <span className={`${widthClass} truncate text-zinc-300`}>
+        {match?.label ?? <span className="text-zinc-600">—</span>}
+      </span>
+    );
+  }
+  if (options.length === 0) {
+    return <span className="text-xs italic text-zinc-600">{fallback}</span>;
+  }
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
+      className={`${widthClass} cursor-pointer truncate rounded bg-transparent px-1 py-0.5 text-zinc-300 outline-none transition hover:bg-zinc-800/60 focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500`}
+    >
+      <option value="" className="bg-zinc-900 text-zinc-400">
+        {emptyLabel}
+      </option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value} className="bg-zinc-900 text-zinc-100">
+          {opt.label}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -631,9 +842,8 @@ function EditableText({
         if (draft !== value) onCommit(draft);
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.currentTarget.blur();
-        } else if (e.key === "Escape") {
+        if (e.key === "Enter") e.currentTarget.blur();
+        else if (e.key === "Escape") {
           setDraft(value);
           e.currentTarget.blur();
         }

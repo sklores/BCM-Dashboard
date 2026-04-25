@@ -39,6 +39,29 @@ export type ScheduleSubtask = {
   sort_order: number;
 };
 
+export type ScheduleMaterialCard = {
+  id: string;
+  task_id: string;
+  material_id: string | null;
+  instructions: string | null;
+  pdf_url: string | null;
+};
+
+export type ProjectSubOption = {
+  id: string;
+  name: string;
+};
+
+export type ProjectTeamOption = {
+  user_id: string;
+  name: string;
+};
+
+export type MaterialCatalogOption = {
+  id: string;
+  product_name: string;
+};
+
 export type ScheduleMilestone = {
   id: string;
   project_id: string;
