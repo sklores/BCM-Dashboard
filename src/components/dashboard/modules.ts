@@ -13,12 +13,14 @@ import {
   StickyNote,
   CalendarDays,
   Building2,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
 import { SubsModule } from "@/components/modules/subs/SubsModule";
 import { TeamModule } from "@/components/modules/team/TeamModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
+import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
 
 export type ModuleProps = {
@@ -46,6 +48,7 @@ export const modules: ModuleDef[] = [
   { key: "plans",     label: "Plans",     icon: Map,          Component: PlaceholderModule },
   { key: "permits",   label: "Permits",   icon: ScrollText,   Component: PlaceholderModule },
   { key: "notes",     label: "Notes",     icon: StickyNote,   Component: PlaceholderModule },
+  { key: "messages",  label: "Messages",  icon: Inbox,        Component: MessagesModule    },
   { key: "calendar",  label: "Calendar",  icon: CalendarDays, Component: PlaceholderModule },
   { key: "client",    label: "Client",    icon: Building2,    Component: PlaceholderModule },
 ];

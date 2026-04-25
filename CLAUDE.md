@@ -43,7 +43,7 @@ Desktop only for now. Two persistent navigation surfaces:
 
 Each module is a **self-contained plugin** with its own data model, UI, role permissions, and on/off switch (`modules.enabled`). Inspired by DAW plugin architecture from And Done.
 
-The 13 modules:
+The 14 modules:
 
 1. Reports
 2. Materials
@@ -56,8 +56,9 @@ The 13 modules:
 9. Plans
 10. Permits
 11. Notes
-12. Calendar
-13. Client
+12. Messages
+13. Calendar
+14. Client
 
 ### Module data sources
 
