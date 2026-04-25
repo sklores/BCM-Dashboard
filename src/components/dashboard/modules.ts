@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import {
   FileText,
   Package,
@@ -14,25 +15,34 @@ import {
   Building2,
   type LucideIcon,
 } from "lucide-react";
+import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
+import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
+
+export type ModuleProps = {
+  projectId: string;
+  moduleKey: string;
+  moduleLabel: string;
+};
 
 export type ModuleDef = {
   key: string;
   label: string;
   icon: LucideIcon;
+  Component: ComponentType<ModuleProps>;
 };
 
 export const modules: ModuleDef[] = [
-  { key: "reports", label: "Reports", icon: FileText },
-  { key: "materials", label: "Materials", icon: Package },
-  { key: "subs", label: "Subs", icon: HardHat },
-  { key: "team", label: "Team", icon: Users },
-  { key: "tasks", label: "Tasks", icon: ListChecks },
-  { key: "photos", label: "Photos", icon: ImageIcon },
-  { key: "budget", label: "Budget", icon: DollarSign },
-  { key: "schedule", label: "Schedule", icon: BarChart3 },
-  { key: "plans", label: "Plans", icon: Map },
-  { key: "permits", label: "Permits", icon: ScrollText },
-  { key: "notes", label: "Notes", icon: StickyNote },
-  { key: "calendar", label: "Calendar", icon: CalendarDays },
-  { key: "client", label: "Client", icon: Building2 },
+  { key: "reports",   label: "Reports",   icon: FileText,     Component: PlaceholderModule },
+  { key: "materials", label: "Materials", icon: Package,      Component: PlaceholderModule },
+  { key: "subs",      label: "Subs",      icon: HardHat,      Component: PlaceholderModule },
+  { key: "team",      label: "Team",      icon: Users,        Component: PlaceholderModule },
+  { key: "tasks",     label: "Tasks",     icon: ListChecks,   Component: PlaceholderModule },
+  { key: "photos",    label: "Photos",    icon: ImageIcon,    Component: PlaceholderModule },
+  { key: "budget",    label: "Budget",    icon: DollarSign,   Component: PlaceholderModule },
+  { key: "schedule",  label: "Schedule",  icon: BarChart3,    Component: ScheduleModule    },
+  { key: "plans",     label: "Plans",     icon: Map,          Component: PlaceholderModule },
+  { key: "permits",   label: "Permits",   icon: ScrollText,   Component: PlaceholderModule },
+  { key: "notes",     label: "Notes",     icon: StickyNote,   Component: PlaceholderModule },
+  { key: "calendar",  label: "Calendar",  icon: CalendarDays, Component: PlaceholderModule },
+  { key: "client",    label: "Client",    icon: Building2,    Component: PlaceholderModule },
 ];
