@@ -99,7 +99,7 @@ export async function POST(req: Request) {
   try {
     const response = await client.messages.create({
       model: "claude-opus-4-7",
-      max_tokens: 16000,
+      max_tokens: 64000,
       thinking: { type: "adaptive" },
       output_config: {
         format: {
@@ -128,7 +128,28 @@ export async function POST(req: Request) {
         { status: 502 },
       );
     }
-    const parsed = JSON.parse(block.text) as Parsed;
+    if (response.stop_reason === "max_tokens") {
+      return NextResponse.json(
+        {
+          error:
+            "Contractor list is larger than what fits in a single pass. Split the input into ~200-row chunks and import them one at a time.",
+        },
+        { status: 413 },
+      );
+    }
+    let parsed: Parsed;
+    try {
+      parsed = JSON.parse(block.text) as Parsed;
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error:
+            "Couldn't parse extraction output (likely truncated). Try splitting the list into smaller chunks. " +
+            (e instanceof Error ? e.message : ""),
+        },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(parsed);
   } catch (err) {
     return NextResponse.json(
