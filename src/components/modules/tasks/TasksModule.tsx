@@ -575,21 +575,21 @@ function ListView({
         key={t.id}
         type="button"
         onClick={() => onOpen(t)}
-        className="flex w-full items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+        className="flex w-full items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
       >
         <span
-          className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${TASK_STATUS_STYLE[t.status]}`}
+          className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-wider ${TASK_STATUS_STYLE[t.status]}`}
         >
           {TASK_STATUS_LABEL[t.status]}
         </span>
         <span
-          className={`hidden shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wider sm:inline-flex ${PRIORITY_STYLE[t.priority]}`}
+          className={`hidden shrink-0 items-center rounded-full border px-2 py-1 text-[11px] uppercase tracking-wider sm:inline-flex ${PRIORITY_STYLE[t.priority]}`}
         >
           {PRIORITY_LABEL[t.priority]}
         </span>
         <div className="min-w-0 flex-1">
           <div
-            className={`truncate text-sm ${
+            className={`truncate text-base ${
               t.status === "complete"
                 ? "text-zinc-500 line-through"
                 : "text-zinc-100"
@@ -597,10 +597,10 @@ function ListView({
           >
             {t.title}
             {t.recurring && (
-              <RotateCw className="ml-1 inline h-3 w-3 text-zinc-500" />
+              <RotateCw className="ml-1 inline h-3.5 w-3.5 text-zinc-500" />
             )}
           </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-zinc-500">
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-500">
             {t.due_date && <span>Due {fmtDate(t.due_date)}</span>}
             {ass.length > 0 && <span>{ass.join(", ")}</span>}
             {punch?.location && <span>📍 {punch.location}</span>}
@@ -608,17 +608,17 @@ function ListView({
           </div>
         </div>
         {overdue && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300">
-            <AlertTriangle className="h-3 w-3" />
+          <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] text-red-300">
+            <AlertTriangle className="h-3.5 w-3.5" />
             Overdue
           </span>
         )}
         {atRisk && (
           <span
             title="A predecessor is not complete and may slip your due date"
-            className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300"
+            className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-300"
           >
-            <AlertTriangle className="h-3 w-3" />
+            <AlertTriangle className="h-3.5 w-3.5" />
             At risk
           </span>
         )}
@@ -699,25 +699,25 @@ function BoardView({
   onOpen: (t: Task) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {TASK_STATUSES.map((status) => {
         const items = tasks.filter((t) => t.status === status);
         return (
           <div
             key={status}
-            className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/40 p-2"
+            className="flex flex-col gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-3"
           >
             <div className="flex items-center justify-between px-1">
               <span
-                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${TASK_STATUS_STYLE[status]}`}
+                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] uppercase tracking-wider ${TASK_STATUS_STYLE[status]}`}
               >
                 {TASK_STATUS_LABEL[status]}
               </span>
-              <span className="text-xs text-zinc-500">{items.length}</span>
+              <span className="text-sm text-zinc-500">{items.length}</span>
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-2">
               {items.length === 0 && (
-                <div className="rounded border border-dashed border-zinc-800 p-2 text-center text-[11px] text-zinc-600">
+                <div className="rounded border border-dashed border-zinc-800 p-3 text-center text-xs text-zinc-600">
                   Empty
                 </div>
               )}
@@ -726,11 +726,11 @@ function BoardView({
                   key={t.id}
                   type="button"
                   onClick={() => onOpen(t)}
-                  className="flex flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950/60 p-2 text-left transition hover:border-zinc-700 hover:bg-zinc-950"
+                  className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-950/60 p-3 text-left transition hover:border-zinc-700 hover:bg-zinc-950"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span
-                      className={`text-xs ${
+                      className={`text-sm ${
                         t.status === "complete"
                           ? "text-zinc-500 line-through"
                           : "text-zinc-100"
@@ -739,12 +739,12 @@ function BoardView({
                       {t.title}
                     </span>
                     <span
-                      className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[9px] uppercase tracking-wider ${PRIORITY_STYLE[t.priority]}`}
+                      className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${PRIORITY_STYLE[t.priority]}`}
                     >
-                      {PRIORITY_LABEL[t.priority][0]}
+                      {PRIORITY_LABEL[t.priority]}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                  <div className="flex items-center gap-2 text-xs text-zinc-500">
                     {t.due_date && <span>{fmtDate(t.due_date)}</span>}
                     {isOverdue(t) && (
                       <span className="text-red-400">Overdue</span>
@@ -758,7 +758,7 @@ function BoardView({
                         e.stopPropagation();
                         onUpdateStatus(t.id, e.target.value as TaskStatus);
                       }}
-                      className="mt-1 rounded border border-zinc-800 bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-300 outline-none focus:border-blue-500 [color-scheme:dark]"
+                      className="mt-1 rounded border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 outline-none focus:border-blue-500 [color-scheme:dark]"
                     >
                       {TASK_STATUSES.map((s) => (
                         <option key={s} value={s}>

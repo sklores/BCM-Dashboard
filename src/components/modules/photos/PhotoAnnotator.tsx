@@ -132,7 +132,9 @@ export function PhotoAnnotator({
     ctx.lineJoin = "round";
     ctx.strokeStyle = s.color;
     ctx.fillStyle = s.color;
-    ctx.lineWidth = s.size;
+    // Scale strokes 3× so the slider reaches a meaningfully thick line at
+    // 20 (and stays usable at low values).
+    ctx.lineWidth = s.size * 3;
     if (s.kind === "pen") {
       if (s.points.length === 0) return;
       ctx.beginPath();
