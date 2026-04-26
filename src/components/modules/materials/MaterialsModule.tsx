@@ -1,17 +1,32 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Globe, Loader2, Package, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import {
+  ExternalLink,
+  Globe,
+  ImagePlus,
+  Loader2,
+  Package,
+  Plus,
+  Sparkles,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
   createMaterial,
   deleteMaterial,
+  deleteMaterialPhoto,
+  fetchMaterialPhotos,
   fetchMaterials,
   updateMaterial,
+  uploadMaterialPhoto,
   type MaterialPatch,
 } from "./queries";
-import type { Material } from "./types";
+import type { Material, MaterialPhoto } from "./types";
+
+type Section = "catalog" | "finish";
 
 type ImportedFields = {
   product_name: string | null;
@@ -48,7 +63,9 @@ function importedToPatch(fields: ImportedFields): Partial<MaterialPatch> {
 export function MaterialsModule({ projectId }: ModuleProps) {
   const role = useRole();
   const editable = canEdit(role);
+  const [section, setSection] = useState<Section>("catalog");
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [photos, setPhotos] = useState<MaterialPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +85,9 @@ export function MaterialsModule({ projectId }: ModuleProps) {
         const rows = await fetchMaterials(projectId);
         if (cancelled) return;
         setMaterials(rows);
+        const photoRows = await fetchMaterialPhotos(rows.map((r) => r.id));
+        if (cancelled) return;
+        setPhotos(photoRows);
       } catch (err) {
         if (!cancelled)
           setError(
@@ -192,11 +212,62 @@ export function MaterialsModule({ projectId }: ModuleProps) {
     }
   }
 
+  async function handleAddPhoto(materialId: string, file: File) {
+    try {
+      const existing = photos.filter((p) => p.material_id === materialId);
+      const nextOrder = existing.length;
+      const created = await uploadMaterialPhoto(materialId, file, nextOrder);
+      setPhotos((rows) => [...rows, created]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload photo");
+    }
+  }
+
+  async function handleDeletePhoto(photo: MaterialPhoto) {
+    const prev = photos;
+    setPhotos((rows) => rows.filter((p) => p.id !== photo.id));
+    try {
+      await deleteMaterialPhoto(photo.id, photo.storage_path);
+    } catch (err) {
+      setPhotos(prev);
+      setError(err instanceof Error ? err.message : "Failed to delete photo");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <Package className="h-6 w-6 text-blue-400" />
         <h1 className="text-2xl font-semibold text-zinc-100">Materials</h1>
+      </div>
+
+      <div className="inline-flex w-fit rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+        {(
+          [
+            ["catalog", "Catalog"],
+            ["finish", "Finish Schedule"],
+          ] as const
+        ).map(([key, label]) => {
+          const active = key === section;
+          const count =
+            key === "finish"
+              ? materials.filter((m) => m.is_finish).length
+              : materials.length;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSection(key)}
+              className={`rounded px-4 py-1.5 text-sm transition ${
+                active
+                  ? "bg-zinc-800 text-zinc-100"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              {label} ({count})
+            </button>
+          );
+        })}
       </div>
 
       {!editable && (
@@ -208,7 +279,7 @@ export function MaterialsModule({ projectId }: ModuleProps) {
       {loading && <p className="text-sm text-zinc-500">Loading…</p>}
       {error && <p className="text-sm text-red-400">Error: {error}</p>}
 
-      {!loading && !error && (
+      {!loading && !error && section === "catalog" && (
         <>
           <p className="text-sm text-zinc-400">
             Catalog for this project. Pricing lives here; Schedule task cards
@@ -298,13 +369,14 @@ export function MaterialsModule({ projectId }: ModuleProps) {
                   <th className="px-3 py-2 font-medium">SKU</th>
                   <th className="px-3 py-2 font-medium">Price</th>
                   <th className="px-3 py-2 font-medium">Lead time</th>
+                  <th className="w-20 px-3 py-2 font-medium">Finish</th>
                   <th className="w-8 px-2 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {materials.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-3 py-4 text-zinc-500">
+                    <td colSpan={8} className="px-3 py-4 text-zinc-500">
                       No materials yet.
                     </td>
                   </tr>
@@ -375,6 +447,18 @@ export function MaterialsModule({ projectId }: ModuleProps) {
                         className="text-zinc-300"
                       />
                     </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={m.is_finish}
+                        disabled={!editable}
+                        onChange={(e) =>
+                          handleUpdate(m.id, { is_finish: e.target.checked })
+                        }
+                        className="h-4 w-4 cursor-pointer rounded border-zinc-700 bg-zinc-900 text-blue-500 focus:ring-1 focus:ring-blue-500 focus:ring-offset-0 disabled:cursor-not-allowed [color-scheme:dark]"
+                        aria-label="Include in finish schedule"
+                      />
+                    </td>
                     <td className="w-8 px-2 py-2 text-right">
                       {editable && (
                         <RowDeleteButton
@@ -401,7 +485,300 @@ export function MaterialsModule({ projectId }: ModuleProps) {
           )}
         </>
       )}
+
+      {!loading && !error && section === "finish" && (
+        <FinishScheduleSection
+          materials={materials.filter((m) => m.is_finish)}
+          photos={photos}
+          editable={editable}
+          onUpdate={handleUpdate}
+          onUncheck={(id) => handleUpdate(id, { is_finish: false })}
+          onAddPhoto={handleAddPhoto}
+          onDeletePhoto={handleDeletePhoto}
+        />
+      )}
     </div>
+  );
+}
+
+function FinishScheduleSection({
+  materials,
+  photos,
+  editable,
+  onUpdate,
+  onUncheck,
+  onAddPhoto,
+  onDeletePhoto,
+}: {
+  materials: Material[];
+  photos: MaterialPhoto[];
+  editable: boolean;
+  onUpdate: (id: string, patch: MaterialPatch) => Promise<void>;
+  onUncheck: (id: string) => void;
+  onAddPhoto: (materialId: string, file: File) => Promise<void>;
+  onDeletePhoto: (photo: MaterialPhoto) => Promise<void>;
+}) {
+  if (materials.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 p-8 text-center text-sm text-zinc-400">
+        <p>No materials in the finish schedule yet.</p>
+        <p className="text-xs text-zinc-500">
+          In the Catalog tab, tick the <span className="text-zinc-300">Finish</span> column
+          on a material to add it here with extended fields and photos.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      {materials.map((m) => (
+        <FinishCard
+          key={m.id}
+          material={m}
+          photos={photos.filter((p) => p.material_id === m.id)}
+          editable={editable}
+          onUpdate={onUpdate}
+          onUncheck={onUncheck}
+          onAddPhoto={onAddPhoto}
+          onDeletePhoto={onDeletePhoto}
+        />
+      ))}
+    </div>
+  );
+}
+
+function FinishCard({
+  material,
+  photos,
+  editable,
+  onUpdate,
+  onUncheck,
+  onAddPhoto,
+  onDeletePhoto,
+}: {
+  material: Material;
+  photos: MaterialPhoto[];
+  editable: boolean;
+  onUpdate: (id: string, patch: MaterialPatch) => Promise<void>;
+  onUncheck: (id: string) => void;
+  onAddPhoto: (materialId: string, file: File) => Promise<void>;
+  onDeletePhoto: (photo: MaterialPhoto) => Promise<void>;
+}) {
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleFiles(files: File[]) {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    if (images.length === 0) return;
+    setUploading(true);
+    try {
+      for (const file of images) {
+        await onAddPhoto(material.id, file);
+      }
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-base font-semibold text-zinc-100">
+            {material.product_name}
+          </div>
+          <div className="text-xs text-zinc-500">
+            {[material.manufacturer, material.supplier]
+              .filter(Boolean)
+              .join(" · ") || "—"}
+            {material.sku ? ` · ${material.sku}` : ""}
+          </div>
+        </div>
+        {editable && (
+          <button
+            type="button"
+            onClick={() => onUncheck(material.id)}
+            className="text-xs text-zinc-500 hover:text-red-400"
+            title="Remove from finish schedule"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+
+      {/* Photo gallery */}
+      <div
+        onDragOver={(e) => {
+          if (!editable) return;
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          if (!editable) return;
+          const files = Array.from(e.dataTransfer.files);
+          handleFiles(files);
+        }}
+        className={`grid grid-cols-4 gap-2 rounded-md border-2 border-dashed p-2 transition ${
+          dragOver
+            ? "border-blue-500 bg-blue-500/5"
+            : "border-zinc-800 bg-zinc-950"
+        }`}
+      >
+        {photos.map((photo) => (
+          <a
+            key={photo.id}
+            href={photo.storage_url ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            className="group relative aspect-square overflow-hidden rounded border border-zinc-800 bg-zinc-900"
+            onClick={(e) => {
+              if (!photo.storage_url) e.preventDefault();
+            }}
+          >
+            {photo.storage_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={photo.storage_url}
+                alt=""
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-[10px] text-zinc-600">
+                no preview
+              </div>
+            )}
+            {editable && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (window.confirm("Delete this photo?"))
+                    onDeletePhoto(photo);
+                }}
+                className="absolute right-1 top-1 rounded bg-black/70 p-1 text-zinc-300 opacity-0 transition hover:text-red-400 group-hover:opacity-100"
+                aria-label="Delete photo"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            )}
+          </a>
+        ))}
+        {editable && (
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={uploading}
+            className="flex aspect-square items-center justify-center rounded border border-dashed border-zinc-700 text-zinc-500 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+            aria-label="Add photo"
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ImagePlus className="h-4 w-4" />
+            )}
+          </button>
+        )}
+        <input
+          ref={photoInputRef}
+          type="file"
+          multiple
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            handleFiles(files);
+            if (photoInputRef.current) photoInputRef.current.value = "";
+          }}
+        />
+      </div>
+
+      {/* Extended fields */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="Room / location">
+          <EditableText
+            value={material.room ?? ""}
+            editable={editable}
+            placeholder="—"
+            onCommit={(v) => onUpdate(material.id, { room: v || null })}
+            className="text-zinc-200"
+          />
+        </Field>
+        <Field label="Color / finish">
+          <EditableText
+            value={material.color_finish ?? ""}
+            editable={editable}
+            placeholder="—"
+            onCommit={(v) =>
+              onUpdate(material.id, { color_finish: v || null })
+            }
+            className="text-zinc-200"
+          />
+        </Field>
+      </div>
+
+      <Field label="Installation notes">
+        <textarea
+          defaultValue={material.installation_notes ?? ""}
+          disabled={!editable}
+          onBlur={(e) => {
+            const v = e.target.value;
+            const current = material.installation_notes ?? "";
+            if (v !== current) {
+              onUpdate(material.id, { installation_notes: v || null });
+            }
+          }}
+          rows={3}
+          placeholder="—"
+          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+        />
+      </Field>
+
+      {/* Catalog reference summary */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-zinc-800 pt-2 text-[11px] text-zinc-500">
+        <span>
+          Price:{" "}
+          <span className="text-zinc-300">
+            {material.price === null
+              ? "—"
+              : `$${material.price.toFixed(2)}`}
+          </span>
+        </span>
+        <span>
+          Lead time:{" "}
+          <span className="text-zinc-300">{material.lead_time ?? "—"}</span>
+        </span>
+        {material.notes && (
+          <span className="ml-auto inline-flex items-center gap-1 text-zinc-400">
+            <ExternalLink className="h-3 w-3" />
+            Has catalog notes
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-[11px] uppercase tracking-wider text-zinc-500">
+      {label}
+      <div className="text-sm normal-case tracking-normal text-zinc-200">
+        {children}
+      </div>
+    </label>
   );
 }
 
