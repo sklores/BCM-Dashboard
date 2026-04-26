@@ -105,7 +105,6 @@ export async function POST(req: Request) {
         format: {
           type: "json_schema",
           schema: SCHEMA,
-          name: "contractor_extraction",
         },
       },
       messages: [
