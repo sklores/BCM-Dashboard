@@ -9,8 +9,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
+  ExternalLink,
   GripHorizontal,
+  Minimize2,
   Plus,
   StickyNote,
   Trash2,
@@ -386,10 +389,218 @@ function FloatingNotesWindow({
     }
   }
 
-  if (!isOpen) return null;
+  // ----- Picture-in-Picture (popped-out OS window) -----
+
+  const [pipWindow, setPipWindow] = useState<Window | null>(null);
+  const pipSupported =
+    typeof window !== "undefined" &&
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    !!(window as any).documentPictureInPicture;
+
+  async function popOut() {
+    if (!pipSupported) {
+      window.alert(
+        "Pop-out requires Chrome or Edge 116+. Your browser doesn't support the Document Picture-in-Picture API.",
+      );
+      return;
+    }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dpip = (window as any).documentPictureInPicture;
+      const w: Window = await dpip.requestWindow({
+        width: persisted.width,
+        height: persisted.height,
+      });
+      // Copy stylesheets so Tailwind classes work in the popped window.
+      copyStylesIntoWindow(w);
+      // Match the dashboard dark theme.
+      w.document.documentElement.classList.add("dark");
+      w.document.body.style.margin = "0";
+      w.document.body.style.background = "#09090b"; // zinc-950
+      w.document.body.style.color = "#f4f4f5"; // zinc-100
+      w.document.body.style.fontFamily =
+        getComputedStyle(document.body).fontFamily;
+      w.document.title = "Notes";
+      w.addEventListener("pagehide", () => setPipWindow(null), { once: true });
+      setPipWindow(w);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Pop-out failed");
+    }
+  }
+
+  function popIn() {
+    if (pipWindow && !pipWindow.closed) pipWindow.close();
+    setPipWindow(null);
+  }
+
+  if (!isOpen && !pipWindow) return null;
 
   const list = activeTab === "scratch" ? scratch : teamPad;
   const active = list.find((n) => n.id === activeNoteId) ?? null;
+
+  const popped = !!pipWindow;
+
+  const titleBar = (
+    <div
+      onMouseDown={popped ? undefined : startDrag}
+      className={`flex shrink-0 items-center gap-2 border-b border-zinc-800 bg-zinc-950/60 px-3 py-2 select-none ${
+        popped ? "" : "cursor-move rounded-t-lg"
+      }`}
+    >
+      {!popped && <GripHorizontal className="h-4 w-4 text-zinc-600" />}
+      <StickyNote className="h-4 w-4 text-blue-400" />
+      <span className="text-sm font-medium text-zinc-100">Notes</span>
+      <div className="ml-3 inline-flex rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+        {(["scratch", "team_pad"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              setActiveTab(tab);
+              setActiveNoteId(null);
+            }}
+            className={`rounded px-2 py-0.5 text-xs transition ${
+              activeTab === tab
+                ? "bg-zinc-800 text-zinc-100"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            {tab === "scratch" ? "Scratch" : "Team Pad"}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={handleNew}
+        title="New note"
+        className="ml-auto rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-blue-400"
+      >
+        <Plus className="h-4 w-4" />
+      </button>
+      {popped ? (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={popIn}
+          title="Bring back into the dashboard"
+          className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-blue-400"
+        >
+          <Minimize2 className="h-4 w-4" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={popOut}
+          disabled={!pipSupported}
+          title={
+            pipSupported
+              ? "Pop out as a separate window"
+              : "Pop-out needs Chrome or Edge 116+"
+          }
+          className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-blue-400 disabled:opacity-40"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </button>
+      )}
+      {!popped && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={close}
+          title="Close"
+          className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+
+  const picker = (
+    <div className="shrink-0 border-b border-zinc-800 px-3 py-1.5">
+      {list.length === 0 ? (
+        <div className="text-xs text-zinc-500">
+          No notes yet — click + to create one.
+        </div>
+      ) : (
+        <select
+          value={activeNoteId ?? ""}
+          onChange={(e) =>
+            setActiveNoteId(e.target.value === "" ? null : e.target.value)
+          }
+          className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+        >
+          <option value="">Pick a note…</option>
+          {list.map((n) => (
+            <option key={n.id} value={n.id}>
+              {(n.title || "Untitled").slice(0, 60)}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+
+  const editorArea = (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {loading && !active && (
+        <div className="flex flex-1 items-center justify-center text-xs text-zinc-500">
+          Loading…
+        </div>
+      )}
+      {error && (
+        <div className="px-3 py-2 text-xs text-red-400">{error}</div>
+      )}
+      {active && (
+        <NoteEditor
+          key={active.id}
+          note={active}
+          onTitle={(v) =>
+            activeTab === "scratch"
+              ? handleUpdateScratch(active.id, { title: v || null })
+              : handleUpdateTeamPad(active.id, { title: v || null })
+          }
+          onBody={(v) =>
+            activeTab === "scratch"
+              ? handleUpdateScratch(active.id, { body: v })
+              : handleUpdateTeamPad(active.id, { body: v })
+          }
+          onDelete={() => handleDelete(active.id)}
+        />
+      )}
+      {!active && !loading && list.length > 0 && (
+        <div className="flex flex-1 items-center justify-center text-xs text-zinc-500">
+          Pick a note above, or click + to create one.
+        </div>
+      )}
+      {!active && !loading && list.length === 0 && (
+        <button
+          type="button"
+          onClick={handleNew}
+          className="m-3 rounded-md border border-dashed border-zinc-700 bg-zinc-950/60 px-3 py-6 text-sm text-zinc-400 transition hover:border-blue-500 hover:text-blue-400"
+        >
+          <Plus className="mx-auto h-4 w-4" />
+          <span className="mt-1 block">Start a new note</span>
+        </button>
+      )}
+    </div>
+  );
+
+  if (popped && pipWindow) {
+    return createPortal(
+      <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
+        {titleBar}
+        {picker}
+        {editorArea}
+      </div>,
+      pipWindow.document.body,
+    );
+  }
+
+  if (!isOpen) return null;
 
   return (
     <div
@@ -403,122 +614,9 @@ function FloatingNotesWindow({
         height: persisted.height,
       }}
     >
-      {/* Title bar (drag handle) */}
-      <div
-        onMouseDown={startDrag}
-        className="flex shrink-0 cursor-move items-center gap-2 rounded-t-lg border-b border-zinc-800 bg-zinc-950/60 px-3 py-2 select-none"
-      >
-        <GripHorizontal className="h-4 w-4 text-zinc-600" />
-        <StickyNote className="h-4 w-4 text-blue-400" />
-        <span className="text-sm font-medium text-zinc-100">Notes</span>
-        <div className="ml-3 inline-flex rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
-          {(["scratch", "team_pad"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={() => {
-                setActiveTab(tab);
-                setActiveNoteId(null);
-              }}
-              className={`rounded px-2 py-0.5 text-xs transition ${
-                activeTab === tab
-                  ? "bg-zinc-800 text-zinc-100"
-                  : "text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              {tab === "scratch" ? "Scratch" : "Team Pad"}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={handleNew}
-          title="New note"
-          className="ml-auto rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-blue-400"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={close}
-          title="Close"
-          className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Note picker */}
-      <div className="shrink-0 border-b border-zinc-800 px-3 py-1.5">
-        {list.length === 0 ? (
-          <div className="text-xs text-zinc-500">
-            No notes yet — click + to create one.
-          </div>
-        ) : (
-          <select
-            value={activeNoteId ?? ""}
-            onChange={(e) =>
-              setActiveNoteId(e.target.value === "" ? null : e.target.value)
-            }
-            className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
-          >
-            <option value="">Pick a note…</option>
-            {list.map((n) => (
-              <option key={n.id} value={n.id}>
-                {(n.title || "Untitled").slice(0, 60)}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {/* Editor / loading */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        {loading && !active && (
-          <div className="flex flex-1 items-center justify-center text-xs text-zinc-500">
-            Loading…
-          </div>
-        )}
-        {error && (
-          <div className="px-3 py-2 text-xs text-red-400">{error}</div>
-        )}
-        {active && (
-          <NoteEditor
-            key={active.id}
-            note={active}
-            onTitle={(v) =>
-              activeTab === "scratch"
-                ? handleUpdateScratch(active.id, { title: v || null })
-                : handleUpdateTeamPad(active.id, { title: v || null })
-            }
-            onBody={(v) =>
-              activeTab === "scratch"
-                ? handleUpdateScratch(active.id, { body: v })
-                : handleUpdateTeamPad(active.id, { body: v })
-            }
-            onDelete={() => handleDelete(active.id)}
-          />
-        )}
-        {!active && !loading && list.length > 0 && (
-          <div className="flex flex-1 items-center justify-center text-xs text-zinc-500">
-            Pick a note above, or click + to create one.
-          </div>
-        )}
-        {!active && !loading && list.length === 0 && (
-          <button
-            type="button"
-            onClick={handleNew}
-            className="m-3 rounded-md border border-dashed border-zinc-700 bg-zinc-950/60 px-3 py-6 text-sm text-zinc-400 transition hover:border-blue-500 hover:text-blue-400"
-          >
-            <Plus className="mx-auto h-4 w-4" />
-            <span className="mt-1 block">Start a new note</span>
-          </button>
-        )}
-      </div>
-
+      {titleBar}
+      {picker}
+      {editorArea}
       {/* Resize handle */}
       <div
         onMouseDown={startResize}
@@ -600,4 +698,31 @@ function NoteEditor({
 
 function clamp(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v));
+}
+
+function copyStylesIntoWindow(target: Window): void {
+  const heads = Array.from(
+    document.head.querySelectorAll('link[rel="stylesheet"], style'),
+  );
+  for (const node of heads) {
+    target.document.head.appendChild(node.cloneNode(true));
+  }
+  // Mirror future-injected stylesheets (Next.js dev) so styles stay in sync.
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      m.addedNodes.forEach((n) => {
+        if (
+          n instanceof HTMLElement &&
+          (n.tagName === "STYLE" ||
+            (n.tagName === "LINK" && n.getAttribute("rel") === "stylesheet"))
+        ) {
+          target.document.head.appendChild(n.cloneNode(true));
+        }
+      });
+    }
+  });
+  observer.observe(document.head, { childList: true });
+  target.addEventListener("pagehide", () => observer.disconnect(), {
+    once: true,
+  });
 }
