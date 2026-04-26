@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
 import { SubsModule } from "@/components/modules/subs/SubsModule";
-import { TeamModule } from "@/components/modules/team/TeamModule";
+import { ContactsModule } from "@/components/modules/contacts/ContactsModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
@@ -50,7 +50,7 @@ export const modules: ModuleDef[] = [
   { key: "paperwork",  label: "Paperwork",  icon: FileSignature, Component: PaperworkModule   },
   { key: "materials",  label: "Materials",  icon: Package,       Component: MaterialsModule   },
   { key: "subs",       label: "Subs",       icon: HardHat,       Component: SubsModule        },
-  { key: "team",       label: "Team",       icon: Users,         Component: TeamModule        },
+  { key: "contacts",   label: "Contacts",   icon: Users,         Component: ContactsModule    },
   { key: "tasks",      label: "Tasks",      icon: ListChecks,    Component: TasksModule       },
   { key: "photos",     label: "Photos",     icon: ImageIcon,     Component: PhotosModule      },
   { key: "budget",     label: "Budget",     icon: Wallet,        Component: PlaceholderModule },
