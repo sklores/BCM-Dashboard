@@ -78,6 +78,41 @@ export async function deleteDrawing(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// Upload a drawing PDF. Returns the public URL stored on the drawing row.
+export async function uploadDrawingPdf(
+  projectId: string,
+  drawingId: string,
+  file: File,
+): Promise<string> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
+  const path = `${projectId}/${drawingId}/${Date.now()}-${safeName}`;
+  const { error: upErr } = await supabase.storage
+    .from("plans")
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: file.type || "application/pdf",
+    });
+  if (upErr) throw upErr;
+  const { data } = supabase.storage.from("plans").getPublicUrl(path);
+  const { error: updErr } = await supabase
+    .from("drawings")
+    .update({ pdf_url: data.publicUrl })
+    .eq("id", drawingId);
+  if (updErr) throw updErr;
+  return data.publicUrl;
+}
+
+// Clear a drawing's pdf_url. (Doesn't remove the file from storage to keep
+// older revisions retrievable; the drawing row holds the canonical URL.)
+export async function clearDrawingPdf(drawingId: string): Promise<void> {
+  const { error } = await supabase
+    .from("drawings")
+    .update({ pdf_url: null })
+    .eq("id", drawingId);
+  if (error) throw error;
+}
+
 // Mark `oldId` as superseded by `newId` and bump it to status='superseded'.
 export async function supersedeDrawing(
   oldId: string,

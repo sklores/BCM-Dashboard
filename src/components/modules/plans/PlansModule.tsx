@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
+  Loader2,
   Map,
   MessageSquare,
   Pin,
   Plus,
   Sparkles,
   Trash2,
+  Upload,
+  UploadCloud,
   X,
 } from "lucide-react";
 import { canEdit, useRole, type Role } from "@/lib/role-context";
@@ -32,6 +35,7 @@ import {
   type UserOption,
 } from "./types";
 import {
+  clearDrawingPdf,
   createDrawing,
   createRfi,
   createSubmittal,
@@ -46,6 +50,7 @@ import {
   nextRfiNumber,
   nextSubmittalNumber,
   postRfiToMessages,
+  uploadDrawingPdf,
   postSubmittalAlert,
   supersedeDrawing,
   updateDrawing,
@@ -187,6 +192,44 @@ export function PlansModule({ projectId }: ModuleProps) {
               setDrawings((rows) => [created, ...rows]);
             } catch (err) {
               setError(err instanceof Error ? err.message : "Failed to add");
+            }
+          }}
+          onUploadPdf={async (id, file) => {
+            try {
+              const url = await uploadDrawingPdf(projectId, id, file);
+              setDrawings((rows) =>
+                rows.map((d) => (d.id === id ? { ...d, pdf_url: url } : d)),
+              );
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Upload failed");
+            }
+          }}
+          onClearPdf={async (id) => {
+            try {
+              await clearDrawingPdf(id);
+              setDrawings((rows) =>
+                rows.map((d) => (d.id === id ? { ...d, pdf_url: null } : d)),
+              );
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed");
+            }
+          }}
+          onUploadNew={async (file) => {
+            try {
+              const titleGuess = file.name
+                .replace(/\.pdf$/i, "")
+                .replace(/[_-]+/g, " ")
+                .trim();
+              const created = await createDrawing(projectId, {
+                title: titleGuess || null,
+              });
+              const url = await uploadDrawingPdf(projectId, created.id, file);
+              setDrawings((rows) => [
+                { ...created, pdf_url: url },
+                ...rows,
+              ]);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Upload failed");
             }
           }}
           onAddRevision={async (existing) => {
@@ -365,6 +408,9 @@ function DrawingsSection({
   onUpdate,
   onAddRevision,
   onDelete,
+  onUploadPdf,
+  onClearPdf,
+  onUploadNew,
 }: {
   projectId: string;
   drawings: Drawing[];
@@ -374,6 +420,9 @@ function DrawingsSection({
   onUpdate: (id: string, patch: DrawingPatch) => Promise<void>;
   onAddRevision: (d: Drawing) => Promise<void>;
   onDelete: (id: string) => void;
+  onUploadPdf: (id: string, file: File) => Promise<void>;
+  onClearPdf: (id: string) => Promise<void>;
+  onUploadNew: (file: File) => Promise<void>;
 }) {
   void projectId;
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -381,6 +430,22 @@ function DrawingsSection({
     "current",
   );
   const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const newFileRef = useRef<HTMLInputElement>(null);
+
+  async function handleFiles(files: File[]) {
+    const pdfs = files.filter(
+      (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"),
+    );
+    if (pdfs.length === 0) return;
+    setUploading(true);
+    try {
+      for (const f of pdfs) await onUploadNew(f);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const allTypes = useMemo(() => {
     const set = new Set<string>(STANDARD_DRAWING_TYPES);
@@ -437,6 +502,48 @@ function DrawingsSection({
           <option value="all">All</option>
         </select>
       </div>
+
+      {editable && (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            handleFiles(Array.from(e.dataTransfer.files));
+          }}
+          onClick={() => newFileRef.current?.click()}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed py-5 text-sm transition ${
+            dragOver
+              ? "border-blue-500 bg-blue-500/5 text-blue-300"
+              : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+          }`}
+        >
+          {uploading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+          ) : (
+            <UploadCloud className="h-5 w-5" />
+          )}
+          <span>
+            Drop PDF plans here, or click to browse — multiple files at
+            once create one drawing each
+          </span>
+          <input
+            ref={newFileRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(Array.from(e.target.files ?? []));
+              if (newFileRef.current) newFileRef.current.value = "";
+            }}
+          />
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-md border border-zinc-800">
         <table className="w-full min-w-[860px] text-sm">
@@ -556,28 +663,13 @@ function DrawingsSection({
                   </span>
                 </td>
                 <td className="px-3 py-2">
-                  {editable ? (
-                    <TextInput
-                      value={d.pdf_url ?? ""}
-                      editable={editable}
-                      placeholder="Paste OneDrive link"
-                      onCommit={(v) =>
-                        onUpdate(d.id, { pdf_url: v || null })
-                      }
-                      className="text-zinc-300"
-                    />
-                  ) : d.pdf_url ? (
-                    <a
-                      href={d.pdf_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"
-                    >
-                      Open <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ) : (
-                    <span className="text-zinc-500">—</span>
-                  )}
+                  <PdfCell
+                    drawingId={d.id}
+                    pdfUrl={d.pdf_url}
+                    editable={editable}
+                    onUpload={onUploadPdf}
+                    onClear={onClearPdf}
+                  />
                 </td>
                 <td className="w-32 px-2 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
@@ -632,8 +724,8 @@ function DrawingsSection({
       )}
 
       <p className="text-xs italic text-zinc-500">
-        PDF viewer with zoom/pan, pin tool, and Ask AI are coming next iteration —
-        for now drawings link out to their OneDrive PDF.
+        Inline PDF viewer with zoom/pan, pin tool, and Ask AI are coming
+        next iteration. Until then PDFs open in a new tab.
       </p>
 
       {showHistoryFor && (
@@ -1378,5 +1470,113 @@ function UserSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+
+function PdfCell({
+  drawingId,
+  pdfUrl,
+  editable,
+  onUpload,
+  onClear,
+}: {
+  drawingId: string;
+  pdfUrl: string | null;
+  editable: boolean;
+  onUpload: (id: string, file: File) => Promise<void>;
+  onClear: (id: string) => Promise<void>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function pick() {
+    inputRef.current?.click();
+  }
+
+  async function handleFile(file: File) {
+    setBusy(true);
+    try {
+      await onUpload(drawingId, file);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!pdfUrl) {
+    return editable ? (
+      <button
+        type="button"
+        onClick={pick}
+        disabled={busy}
+        className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+      >
+        {busy ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Upload className="h-3 w-3" />
+        )}
+        Upload PDF
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleFile(f);
+            if (inputRef.current) inputRef.current.value = "";
+          }}
+        />
+      </button>
+    ) : (
+      <span className="text-zinc-500">—</span>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <a
+        href={pdfUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"
+      >
+        Open <ExternalLink className="h-3 w-3" />
+      </a>
+      {editable && (
+        <>
+          <button
+            type="button"
+            onClick={pick}
+            disabled={busy}
+            className="rounded-md border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+            title="Replace PDF"
+          >
+            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : "Replace"}
+          </button>
+          <button
+            type="button"
+            onClick={() => onClear(drawingId)}
+            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+            title="Remove PDF"
+            aria-label="Remove PDF"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              if (inputRef.current) inputRef.current.value = "";
+            }}
+          />
+        </>
+      )}
+    </div>
   );
 }
