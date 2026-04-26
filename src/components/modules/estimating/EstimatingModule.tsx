@@ -5,6 +5,7 @@ import { Calculator, Download, Plus, Trash2, X } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import { BidSolicitationModule } from "@/components/modules/bid-solicitation/BidSolicitationModule";
+import { LaborMaterialsSection } from "./LaborMaterialsSection";
 import {
   STATUS_LABEL,
   STATUS_TEXT,
@@ -27,7 +28,7 @@ import {
   type LineItemPatch,
 } from "./queries";
 
-type Section = "estimates" | "bids";
+type Section = "estimates" | "labor_materials" | "bids";
 
 const STATUS_OPTIONS: EstimateStatus[] = [
   "draft",
@@ -164,6 +165,7 @@ export function EstimatingModule(props: ModuleProps) {
         {(
           [
             ["estimates", "Estimates"],
+            ["labor_materials", "Labor & Materials"],
             ["bids", "Bid Solicitation"],
           ] as const
         ).map(([key, label]) => {
@@ -184,6 +186,13 @@ export function EstimatingModule(props: ModuleProps) {
           );
         })}
       </div>
+
+      {section === "labor_materials" && (
+        <LaborMaterialsSection
+          projectId={props.projectId}
+          editable={editable}
+        />
+      )}
 
       {section === "bids" && (
         <BidSolicitationModule
