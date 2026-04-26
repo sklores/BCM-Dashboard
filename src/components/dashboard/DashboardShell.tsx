@@ -47,6 +47,18 @@ export function DashboardShell({ projects }: Props) {
     }
   }, []);
 
+  // Listen for cross-component navigation requests (top bar search, bell).
+  useEffect(() => {
+    function onNavigate(e: Event) {
+      const detail = (e as CustomEvent<{ moduleKey?: string }>).detail;
+      if (detail?.moduleKey && modules.some((m) => m.key === detail.moduleKey)) {
+        setActiveModuleKey(detail.moduleKey);
+      }
+    }
+    window.addEventListener("bcm-navigate", onNavigate);
+    return () => window.removeEventListener("bcm-navigate", onNavigate);
+  }, []);
+
   const orderedModules = useMemo(() => applyOrder(moduleOrder), [moduleOrder]);
 
   function handleReorder(nextKeys: string[]) {
