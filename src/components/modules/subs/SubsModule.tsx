@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HardHat, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Truck } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
@@ -39,7 +39,7 @@ export function SubsModule({ projectId }: ModuleProps) {
         setProjectSubs(links);
       } catch (err) {
         if (!cancelled)
-          setError(err instanceof Error ? err.message : "Failed to load subs");
+          setError(err instanceof Error ? err.message : "Failed to load contractors");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -56,7 +56,7 @@ export function SubsModule({ projectId }: ModuleProps) {
       await updateSub(id, patch);
     } catch (err) {
       setSubs(prev);
-      setError(err instanceof Error ? err.message : "Failed to save sub");
+      setError(err instanceof Error ? err.message : "Failed to save contractor");
     }
   }
 
@@ -65,7 +65,7 @@ export function SubsModule({ projectId }: ModuleProps) {
       const created = await createSub();
       setSubs((rows) => [...rows, created]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add sub");
+      setError(err instanceof Error ? err.message : "Failed to add contractor");
     }
   }
 
@@ -79,7 +79,7 @@ export function SubsModule({ projectId }: ModuleProps) {
     } catch (err) {
       setSubs(prevSubs);
       setProjectSubs(prevLinks);
-      setError(err instanceof Error ? err.message : "Failed to delete sub");
+      setError(err instanceof Error ? err.message : "Failed to delete contractor");
     }
   }
 
@@ -112,13 +112,13 @@ export function SubsModule({ projectId }: ModuleProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
-        <HardHat className="h-6 w-6 text-blue-400" />
-        <h1 className="text-2xl font-semibold text-zinc-100">Subs</h1>
+        <Truck className="h-6 w-6 text-blue-400" />
+        <h1 className="text-2xl font-semibold text-zinc-100">Contractors</h1>
       </div>
 
       {!editable && (
         <p className="text-xs text-zinc-500">
-          View only — your role ({role}) cannot edit subs.
+          View only — your role ({role}) cannot edit contractors.
         </p>
       )}
 
@@ -144,7 +144,7 @@ export function SubsModule({ projectId }: ModuleProps) {
                 {subs.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-3 py-4 text-zinc-500">
-                      No subs yet.
+                      No contractors yet.
                     </td>
                   </tr>
                 )}
@@ -228,7 +228,7 @@ export function SubsModule({ projectId }: ModuleProps) {
                       <td className="w-8 px-2 py-2 text-right">
                         {editable && (
                           <RowDeleteButton
-                            label="Delete sub"
+                            label="Delete contractor"
                             onClick={() => handleDelete(sub.id)}
                           />
                         )}
@@ -247,7 +247,7 @@ export function SubsModule({ projectId }: ModuleProps) {
               className="flex w-fit items-center gap-2 rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
             >
               <Plus className="h-4 w-4" />
-              Add sub
+              Add contractor
             </button>
           )}
         </>
