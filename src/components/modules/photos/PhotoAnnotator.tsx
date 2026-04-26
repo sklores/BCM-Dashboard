@@ -161,15 +161,24 @@ export function PhotoAnnotator({
       ctx.closePath();
       ctx.fill();
     } else if (s.kind === "text") {
-      const fontPx = Math.max(12, s.size * 6);
+      // Sticky-label style: white fill + black frame + black text. The
+      // size slider scales the font; rectangle size derives from measured
+      // text. Color picker doesn't apply to text labels.
+      const fontPx = Math.max(14, s.size * 6);
       ctx.font = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
       ctx.textBaseline = "top";
-      // Drop shadow for legibility against any background
-      ctx.shadowColor = "rgba(0,0,0,0.6)";
-      ctx.shadowBlur = 4;
-      ctx.fillText(s.text, s.x, s.y);
-      ctx.shadowColor = "transparent";
-      ctx.shadowBlur = 0;
+      const padX = Math.round(fontPx * 0.4);
+      const padY = Math.round(fontPx * 0.25);
+      const metrics = ctx.measureText(s.text);
+      const w = Math.ceil(metrics.width) + padX * 2;
+      const h = Math.ceil(fontPx * 1.25) + padY * 2;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(s.x, s.y, w, h);
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = Math.max(1.5, s.size / 3);
+      ctx.strokeRect(s.x, s.y, w, h);
+      ctx.fillStyle = "#000000";
+      ctx.fillText(s.text, s.x + padX, s.y + padY);
     }
   }
 
@@ -462,7 +471,6 @@ export function PhotoAnnotator({
               setPrompt={setTextPrompt}
               onCommit={commitText}
               onCancel={cancelText}
-              color={color}
             />
           )}
         </div>
@@ -488,7 +496,6 @@ function TextEntryOverlay({
   setPrompt,
   onCommit,
   onCancel,
-  color,
 }: {
   overlay: React.RefObject<HTMLCanvasElement | null>;
   prompt: { x: number; y: number; value: string };
@@ -497,7 +504,6 @@ function TextEntryOverlay({
   >;
   onCommit: () => void;
   onCancel: () => void;
-  color: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -519,7 +525,7 @@ function TextEntryOverlay({
 
   return (
     <div
-      className="absolute z-20 flex items-center gap-1 rounded-md border border-blue-500 bg-zinc-950/95 p-1 shadow-xl"
+      className="absolute z-20 flex items-center gap-1"
       style={{ left, top, transform: "translateY(-4px)" }}
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
@@ -541,8 +547,8 @@ function TextEntryOverlay({
           }
         }}
         placeholder="Type your note"
-        className="rounded bg-zinc-900 px-1.5 py-0.5 text-sm font-bold outline-none"
-        style={{ color, minWidth: "180px" }}
+        className="rounded-sm border-2 border-black bg-white px-1.5 py-0.5 text-sm font-bold text-black outline-none focus:ring-2 focus:ring-blue-500"
+        style={{ minWidth: "180px" }}
       />
       <button
         type="button"
@@ -554,7 +560,7 @@ function TextEntryOverlay({
       <button
         type="button"
         onClick={onCancel}
-        className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+        className="rounded p-1 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
         aria-label="Cancel"
       >
         <X className="h-3.5 w-3.5" />
