@@ -97,7 +97,9 @@ export async function POST(req: Request) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
-    const response = await client.messages.create({
+    // SDK requires streaming for long-running calls; collect the final
+    // Message via the SDK's helper so the rest of this route is unchanged.
+    const stream = client.messages.stream({
       model: "claude-opus-4-7",
       max_tokens: 32000,
       thinking: { type: "disabled" },
@@ -120,6 +122,7 @@ export async function POST(req: Request) {
         },
       ],
     });
+    const response = await stream.finalMessage();
 
     const block = response.content.find((b) => b.type === "text");
     if (!block || block.type !== "text") {
