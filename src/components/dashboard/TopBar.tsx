@@ -2,6 +2,7 @@
 
 import { ChevronDown, MapPin, Settings } from "lucide-react";
 import { useState } from "react";
+import Image from "next/image";
 
 export type Project = {
   id: string;
@@ -23,13 +24,26 @@ export function TopBar({
   onOpenSettings,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
   const active = projects.find((p) => p.id === activeProjectId) ?? projects[0];
 
   return (
     <header className="flex h-14 shrink-0 items-center border-b border-zinc-800 bg-zinc-900 px-6">
-      <div className="text-sm font-bold tracking-widest text-zinc-300">
-        BCM
-      </div>
+      {logoFailed ? (
+        <div className="text-sm font-bold tracking-widest text-zinc-300">
+          BCM
+        </div>
+      ) : (
+        <Image
+          src="/bcm-logo.png"
+          alt="Bruno Clay Construction & Management"
+          width={180}
+          height={40}
+          priority
+          onError={() => setLogoFailed(true)}
+          className="h-9 w-auto object-contain"
+        />
+      )}
       <div className="mx-6 h-6 w-px bg-zinc-800" />
       <div className="relative">
         <button
