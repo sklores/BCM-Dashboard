@@ -3,7 +3,6 @@ import type {
   Drawing,
   DrawingPin,
   Rfi,
-  RfiStatus,
   Submittal,
   SubmittalStatus,
   UserOption,
@@ -309,6 +308,3 @@ export async function fetchUserOptions(): Promise<UserOption[]> {
   }));
 }
 
-void fetchPins;
-void RfiStatus;
-void SubmittalStatus;
