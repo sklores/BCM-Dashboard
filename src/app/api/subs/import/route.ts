@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const PROMPT = `You are extracting subcontractor / contractor records from a pasted spreadsheet, CSV, or freeform list.
 
@@ -97,7 +97,9 @@ export async function POST(req: Request) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   try {
-    const response = await client.messages.create({
+    // Stream so the connection stays alive on long lists; collect via the
+    // SDK's finalMessage() helper so we still get a single Message object.
+    const stream = client.messages.stream({
       model: "claude-opus-4-7",
       max_tokens: 16000,
       thinking: { type: "adaptive" },
@@ -106,6 +108,7 @@ export async function POST(req: Request) {
           type: "json_schema",
           schema: SCHEMA,
         },
+        effort: "low",
       },
       messages: [
         {
@@ -119,6 +122,7 @@ export async function POST(req: Request) {
         },
       ],
     });
+    const response = await stream.finalMessage();
 
     const block = response.content.find((b) => b.type === "text");
     if (!block || block.type !== "text") {

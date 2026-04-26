@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 90;
+export const maxDuration = 300;
 
 const PROMPT = `You are reverse-engineering a CSI MasterFormat construction budget from a pasted CSV / spreadsheet export.
 
@@ -148,11 +148,14 @@ export async function POST(req: Request) {
   const schema = kind === "clarifications" ? CLAR_SCHEMA : BUDGET_SCHEMA;
 
   try {
-    const response = await client.messages.create({
+    const stream = client.messages.stream({
       model: "claude-opus-4-7",
       max_tokens: 32000,
       thinking: { type: "adaptive" },
-      output_config: { format: { type: "json_schema", schema } },
+      output_config: {
+        format: { type: "json_schema", schema },
+        effort: "low",
+      },
       messages: [
         {
           role: "user",
@@ -160,6 +163,7 @@ export async function POST(req: Request) {
         },
       ],
     });
+    const response = await stream.finalMessage();
 
     const block = response.content.find((b) => b.type === "text");
     if (!block || block.type !== "text") {
