@@ -27,8 +27,8 @@ import { PhotosModule } from "@/components/modules/photos/PhotosModule";
 import { TasksModule } from "@/components/modules/tasks/TasksModule";
 import { EstimatingModule } from "@/components/modules/estimating/EstimatingModule";
 import { ContractsModule } from "@/components/modules/contracts/ContractsModule";
-import { ProposalsModule } from "@/components/modules/proposals/ProposalsModule";
 import { PlansModule } from "@/components/modules/plans/PlansModule";
+import { ClientModule } from "@/components/modules/client/ClientModule";
 import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
 
 export type ModuleProps = {
@@ -58,8 +58,7 @@ export const modules: ModuleDef[] = [
   { key: "notes",     label: "Notes",     icon: StickyNote,   Component: PlaceholderModule },
   { key: "messages",  label: "Messages",  icon: Inbox,        Component: MessagesModule    },
   { key: "calendar",  label: "Calendar",  icon: CalendarDays, Component: PlaceholderModule },
-  { key: "client",       label: "Client",          icon: Building2,      Component: PlaceholderModule       },
+  { key: "client",       label: "Client",          icon: Building2,      Component: ClientModule            },
   { key: "estimating",   label: "Estimating",      icon: Calculator,     Component: EstimatingModule        },
   { key: "contracts",    label: "Contracts",       icon: FileSignature,  Component: ContractsModule         },
-  { key: "proposals",    label: "Proposals",       icon: FileText,       Component: ProposalsModule         },
 ];
