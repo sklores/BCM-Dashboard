@@ -28,32 +28,28 @@ export const TASK_TYPE_STYLE: Record<TaskType, string> = {
 export type TaskStatus =
   | "not_started"
   | "in_progress"
-  | "blocked"
-  | "complete"
-  | "cancelled";
+  | "delayed"
+  | "complete";
 
 export const TASK_STATUSES: TaskStatus[] = [
   "not_started",
   "in_progress",
-  "blocked",
+  "delayed",
   "complete",
-  "cancelled",
 ];
 
 export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   not_started: "Not Started",
   in_progress: "In Progress",
-  blocked: "Blocked",
+  delayed: "Delayed",
   complete: "Complete",
-  cancelled: "Cancelled",
 };
 
 export const TASK_STATUS_STYLE: Record<TaskStatus, string> = {
   not_started: "bg-zinc-800 text-zinc-300 border-zinc-700",
   in_progress: "bg-blue-500/10 text-blue-300 border-blue-500/30",
-  blocked: "bg-red-500/10 text-red-300 border-red-500/30",
+  delayed: "bg-red-500/10 text-red-300 border-red-500/30",
   complete: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
-  cancelled: "bg-zinc-700/40 text-zinc-500 border-zinc-700",
 };
 
 export type Priority = "low" | "medium" | "high" | "urgent";
@@ -198,7 +194,7 @@ export function fmtDate(s: string | null): string {
 
 export function isOverdue(t: Task): boolean {
   if (!t.due_date) return false;
-  if (t.status === "complete" || t.status === "cancelled") return false;
+  if (t.status === "complete") return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return new Date(t.due_date + "T00:00:00") < today;
