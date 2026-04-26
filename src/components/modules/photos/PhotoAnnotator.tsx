@@ -38,7 +38,7 @@ const COLORS = [
 
 type Stroke =
   | { kind: "pen"; color: string; size: number; points: Array<[number, number]> }
-  | { kind: "text"; color: string; size: number; x: number; y: number; text: string }
+  | { kind: "text"; color: string; size: number; fontPx: number; x: number; y: number; text: string }
   | { kind: "arrow"; color: string; size: number; x1: number; y1: number; x2: number; y2: number }
   | { kind: "rect"; color: string; size: number; x: number; y: number; w: number; h: number };
 
@@ -66,6 +66,13 @@ export function PhotoAnnotator({
     x: number;
     y: number;
     value: string;
+    fontPx: number;
+  } | null>(null);
+  // Drag-to-move state for an existing text label.
+  const [textDrag, setTextDrag] = useState<{
+    index: number;
+    offsetX: number;
+    offsetY: number;
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,10 +168,10 @@ export function PhotoAnnotator({
       ctx.closePath();
       ctx.fill();
     } else if (s.kind === "text") {
-      // Sticky-label style: white fill + black frame + black text. The
-      // size slider scales the font; rectangle size derives from measured
-      // text. Color picker doesn't apply to text labels.
-      const fontPx = Math.max(14, s.size * 6);
+      // Sticky-label style: white fill + black frame + black text. fontPx
+      // is canvas pixels chosen at commit time so the rendered text matches
+      // the on-screen size of the input regardless of image resolution.
+      const fontPx = s.fontPx;
       ctx.font = `bold ${fontPx}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
       ctx.textBaseline = "top";
       const padX = Math.round(fontPx * 0.4);
@@ -175,7 +182,7 @@ export function PhotoAnnotator({
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(s.x, s.y, w, h);
       ctx.strokeStyle = "#000000";
-      ctx.lineWidth = Math.max(1.5, s.size / 3);
+      ctx.lineWidth = Math.max(1.5, fontPx / 24);
       ctx.strokeRect(s.x, s.y, w, h);
       ctx.fillStyle = "#000000";
       ctx.fillText(s.text, s.x + padX, s.y + padY);
@@ -194,9 +201,58 @@ export function PhotoAnnotator({
 
   // ---- Pointer handlers ----
 
+  // Compute the canvas <-> display ratio. Anything 1:1 if image fits 1:1.
+  function getDisplayRatio(): number {
+    const canvas = overlayCanvasRef.current;
+    if (!canvas) return 1;
+    const r = canvas.getBoundingClientRect();
+    return r.width === 0 ? 1 : r.width / canvas.width;
+  }
+  // The on-screen pixel size we want for text (matches the input).
+  function desiredScreenFontPx(): number {
+    return Math.max(14, size * 4);
+  }
+  // Convert that to canvas pixels for the actual draw.
+  function canvasFontPx(): number {
+    const ratio = getDisplayRatio();
+    return desiredScreenFontPx() / Math.max(0.05, ratio);
+  }
+
+  // Hit-test text strokes (top-down) to support drag-to-move.
+  function hitTestText(x: number, y: number): number {
+    const canvas = baseCanvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!ctx) return -1;
+    for (let i = strokes.length - 1; i >= 0; i--) {
+      const s = strokes[i];
+      if (s.kind !== "text") continue;
+      const padX = Math.round(s.fontPx * 0.4);
+      const padY = Math.round(s.fontPx * 0.25);
+      ctx.font = `bold ${s.fontPx}px ui-sans-serif, system-ui, -apple-system, sans-serif`;
+      const metrics = ctx.measureText(s.text);
+      const w = Math.ceil(metrics.width) + padX * 2;
+      const h = Math.ceil(s.fontPx * 1.25) + padY * 2;
+      if (x >= s.x && x <= s.x + w && y >= s.y && y <= s.y + h) return i;
+    }
+    return -1;
+  }
+
   function onPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (textPrompt) return;
     const [x, y] = pointerPos(e);
+
+    // Text labels can be picked up and dragged regardless of the active
+    // tool — that's the most natural feel.
+    const idx = hitTestText(x, y);
+    if (idx >= 0) {
+      const s = strokes[idx];
+      if (s.kind === "text") {
+        setTextDrag({ index: idx, offsetX: x - s.x, offsetY: y - s.y });
+        (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+
     if (tool === "pen") {
       setDrawing({ kind: "pen", color, size, points: [[x, y]] });
       (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
@@ -208,13 +264,24 @@ export function PhotoAnnotator({
       (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     } else if (tool === "text") {
       // Don't capture pointer — the text input needs to take focus.
-      setTextPrompt({ x, y, value: "" });
+      setTextPrompt({ x, y, value: "", fontPx: canvasFontPx() });
     }
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (!drawing) return;
     const [x, y] = pointerPos(e);
+    if (textDrag) {
+      const idx = textDrag.index;
+      setStrokes((prev) =>
+        prev.map((s, i) =>
+          i === idx && s.kind === "text"
+            ? { ...s, x: x - textDrag.offsetX, y: y - textDrag.offsetY }
+            : s,
+        ),
+      );
+      return;
+    }
+    if (!drawing) return;
     if (drawing.kind === "pen") {
       setDrawing({ ...drawing, points: [...drawing.points, [x, y]] });
     } else if (drawing.kind === "rect") {
@@ -225,6 +292,10 @@ export function PhotoAnnotator({
   }
 
   function onPointerUp() {
+    if (textDrag) {
+      setTextDrag(null);
+      return;
+    }
     if (!drawing) return;
     setStrokes((prev) => [...prev, drawing]);
     setDrawing(null);
@@ -236,7 +307,15 @@ export function PhotoAnnotator({
     if (t) {
       setStrokes((prev) => [
         ...prev,
-        { kind: "text", color, size, x: textPrompt.x, y: textPrompt.y, text: t },
+        {
+          kind: "text",
+          color,
+          size,
+          fontPx: textPrompt.fontPx,
+          x: textPrompt.x,
+          y: textPrompt.y,
+          text: t,
+        },
       ]);
     }
     setTextPrompt(null);
@@ -498,9 +577,9 @@ function TextEntryOverlay({
   onCancel,
 }: {
   overlay: React.RefObject<HTMLCanvasElement | null>;
-  prompt: { x: number; y: number; value: string };
+  prompt: { x: number; y: number; value: string; fontPx: number };
   setPrompt: React.Dispatch<
-    React.SetStateAction<{ x: number; y: number; value: string } | null>
+    React.SetStateAction<{ x: number; y: number; value: string; fontPx: number } | null>
   >;
   onCommit: () => void;
   onCancel: () => void;
@@ -515,6 +594,9 @@ function TextEntryOverlay({
   const scaleY = rect && c ? rect.height / c.height : 1;
   const left = prompt.x * scaleX;
   const top = prompt.y * scaleY;
+  // Show the input at the same on-screen size as the saved label will be:
+  // canvas-px font × display ratio = on-screen px.
+  const screenFontPx = prompt.fontPx * scaleY;
 
   // Focus deliberately after mount (autoFocus is unreliable across pointer
   // events).
@@ -547,8 +629,12 @@ function TextEntryOverlay({
           }
         }}
         placeholder="Type your note"
-        className="rounded-sm border-2 border-black bg-white px-1.5 py-0.5 text-sm font-bold text-black outline-none focus:ring-2 focus:ring-blue-500"
-        style={{ minWidth: "180px" }}
+        className="rounded-sm border-2 border-black bg-white font-bold text-black outline-none focus:ring-2 focus:ring-blue-500"
+        style={{
+          minWidth: "180px",
+          fontSize: `${screenFontPx}px`,
+          padding: `${Math.max(2, screenFontPx * 0.25)}px ${Math.max(6, screenFontPx * 0.4)}px`,
+        }}
       />
       <button
         type="button"
