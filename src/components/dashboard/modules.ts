@@ -21,6 +21,7 @@ import {
 import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
 import { SubsModule } from "@/components/modules/subs/SubsModule";
 import { ContactsModule } from "@/components/modules/contacts/ContactsModule";
+import { PermitsModule } from "@/components/modules/permits/PermitsModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
@@ -56,7 +57,7 @@ export const modules: ModuleDef[] = [
   { key: "budget",     label: "Budget",     icon: Wallet,        Component: PlaceholderModule },
   { key: "schedule",   label: "Schedule",   icon: BarChart3,     Component: ScheduleModule    },
   { key: "plans",      label: "Plans",      icon: Map,           Component: PlansModule       },
-  { key: "permits",    label: "Permits",    icon: ScrollText,    Component: PlaceholderModule },
+  { key: "permits",    label: "Permits",    icon: ScrollText,    Component: PermitsModule     },
   { key: "notes",      label: "Notes",      icon: StickyNote,    Component: PlaceholderModule },
   { key: "calendar",   label: "Calendar",   icon: CalendarDays,  Component: PlaceholderModule },
   { key: "messages",   label: "Messages",   icon: Inbox,         Component: MessagesModule    },
