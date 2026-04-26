@@ -432,7 +432,18 @@ function DrawingsSection({
   const [showHistoryFor, setShowHistoryFor] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [viewing, setViewing] = useState<Drawing | null>(null);
   const newFileRef = useRef<HTMLInputElement>(null);
+
+  // Esc closes the inline PDF viewer
+  useEffect(() => {
+    if (!viewing) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setViewing(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [viewing]);
 
   async function handleFiles(files: File[]) {
     const pdfs = files.filter(
@@ -669,6 +680,7 @@ function DrawingsSection({
                     editable={editable}
                     onUpload={onUploadPdf}
                     onClear={onClearPdf}
+                    onView={() => setViewing(d)}
                   />
                 </td>
                 <td className="w-32 px-2 py-2 text-right">
@@ -724,9 +736,12 @@ function DrawingsSection({
       )}
 
       <p className="text-xs italic text-zinc-500">
-        Inline PDF viewer with zoom/pan, pin tool, and Ask AI are coming
-        next iteration. Until then PDFs open in a new tab.
+        Open a row to view the PDF inline. Pin tool and Ask AI are next.
       </p>
+
+      {viewing && (
+        <PdfViewer drawing={viewing} onClose={() => setViewing(null)} />
+      )}
 
       {showHistoryFor && (
         <RevisionHistoryModal
@@ -1480,12 +1495,14 @@ function PdfCell({
   editable,
   onUpload,
   onClear,
+  onView,
 }: {
   drawingId: string;
   pdfUrl: string | null;
   editable: boolean;
   onUpload: (id: string, file: File) => Promise<void>;
   onClear: (id: string) => Promise<void>;
+  onView: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -1536,13 +1553,23 @@ function PdfCell({
 
   return (
     <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={onView}
+        className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"
+        title="View inline"
+      >
+        Open
+      </button>
       <a
         href={pdfUrl}
         target="_blank"
         rel="noreferrer"
-        className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300"
+        className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+        title="Open in new tab"
+        aria-label="Open in new tab"
       >
-        Open <ExternalLink className="h-3 w-3" />
+        <ExternalLink className="h-3 w-3" />
       </a>
       {editable && (
         <>
@@ -1577,6 +1604,80 @@ function PdfCell({
           />
         </>
       )}
+    </div>
+  );
+}
+
+function PdfViewer({
+  drawing,
+  onClose,
+}: {
+  drawing: Drawing;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-black/70"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-full w-full flex-col bg-zinc-950"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center gap-3 border-b border-zinc-800 px-5 py-3">
+          <Map className="h-5 w-5 text-blue-400" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-zinc-100">
+              {drawing.title || "Untitled drawing"}
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-zinc-500">
+              {drawing.drawing_number && (
+                <span>{drawing.drawing_number}</span>
+              )}
+              {drawing.type && (
+                <span>{DRAWING_TYPE_LABEL[drawing.type] ?? drawing.type}</span>
+              )}
+              {drawing.revision_number && (
+                <span>Rev {drawing.revision_number}</span>
+              )}
+            </div>
+          </div>
+          {drawing.pdf_url && (
+            <a
+              href={drawing.pdf_url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+              title="Open in new tab"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              New tab
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            aria-label="Close viewer"
+            title="Close (Esc)"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 bg-zinc-900">
+          {drawing.pdf_url ? (
+            <iframe
+              src={`${drawing.pdf_url}#toolbar=1&navpanes=0`}
+              title={drawing.title || "Drawing"}
+              className="h-full w-full border-0 bg-white"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+              No PDF uploaded for this drawing yet.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
