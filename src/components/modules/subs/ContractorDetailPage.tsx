@@ -12,6 +12,7 @@ import type { Sub } from "./types";
 
 type Tab =
   | "overview"
+  | "jobs"
   | "materials"
   | "paperwork"
   | "billing"
@@ -20,6 +21,7 @@ type Tab =
 
 const TABS: [Tab, string][] = [
   ["overview", "Overview"],
+  ["jobs", "Jobs"],
   ["materials", "Materials"],
   ["paperwork", "Paperwork"],
   ["billing", "Billing"],
@@ -63,6 +65,7 @@ export function ContractorDetailPage({
 
   const counts: Record<Tab, number | null> = {
     overview: null,
+    jobs: detail?.jobs.length ?? null,
     materials: detail?.materials.length ?? null,
     paperwork:
       (detail?.agreements.length ?? 0) + (detail?.change_orders.length ?? 0) ||
@@ -132,6 +135,7 @@ export function ContractorDetailPage({
       {!loading && !error && detail && (
         <>
           {tab === "overview" && <OverviewTab sub={sub} detail={detail} />}
+          {tab === "jobs" && <JobsTab detail={detail} />}
           {tab === "materials" && <MaterialsTab detail={detail} />}
           {tab === "paperwork" && <PaperworkTab detail={detail} />}
           {tab === "billing" && <BillingTab detail={detail} />}
@@ -250,6 +254,41 @@ function OverviewTab({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function JobsTab({ detail }: { detail: ContractorDetail }) {
+  if (detail.jobs.length === 0)
+    return (
+      <Empty msg="No jobs assigned to this contractor. Create a job from the Work module to bundle their scope, materials, and drawings." />
+    );
+  return (
+    <div className="overflow-x-auto rounded-md border border-zinc-800">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead>
+          <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
+            <th className="px-3 py-2 font-medium">Title</th>
+            <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium">Start</th>
+            <th className="px-3 py-2 font-medium">End</th>
+            <th className="px-3 py-2 font-medium">Scope</th>
+          </tr>
+        </thead>
+        <tbody>
+          {detail.jobs.map((j) => (
+            <tr key={j.id} className="border-b border-zinc-900">
+              <td className="px-3 py-2 text-zinc-200">{j.title ?? "—"}</td>
+              <td className="px-3 py-2 text-zinc-300">{j.status}</td>
+              <td className="px-3 py-2 text-zinc-300">{fmtDate(j.start_date)}</td>
+              <td className="px-3 py-2 text-zinc-300">{fmtDate(j.end_date)}</td>
+              <td className="px-3 py-2 text-zinc-300">
+                <span className="line-clamp-2">{j.scope ?? "—"}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

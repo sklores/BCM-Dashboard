@@ -60,6 +60,15 @@ export type ContractorPlanLink = {
   extraction_category: string | null;
 };
 
+export type ContractorJob = {
+  id: string;
+  title: string | null;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  scope: string | null;
+};
+
 export type ContractorDetail = {
   source_extraction_id: string | null;
   source_drawing_id: string | null;
@@ -68,6 +77,7 @@ export type ContractorDetail = {
   change_orders: ContractorChangeOrder[];
   requisitions: ContractorRequisition[];
   schedule_tasks: ContractorScheduleTask[];
+  jobs: ContractorJob[];
   plan_link: ContractorPlanLink | null;
 };
 
@@ -164,7 +174,17 @@ export async function fetchContractorDetail(
     });
   }
 
-  // 7. Plan link via source extraction / drawing recorded on the sub row.
+  // 7. Jobs assigned to this contractor on this project.
+  const jobsRes = await supabase
+    .from("jobs")
+    .select("id, title, status, start_date, end_date, scope")
+    .eq("project_id", projectId)
+    .eq("sub_id", subId)
+    .order("created_at", { ascending: false });
+  if (jobsRes.error) throw jobsRes.error;
+  const jobs = (jobsRes.data ?? []) as ContractorJob[];
+
+  // 8. Plan link via source extraction / drawing recorded on the sub row.
   let plan_link: ContractorPlanLink | null = null;
   if (source_extraction_id || source_drawing_id) {
     plan_link = {
@@ -209,6 +229,7 @@ export async function fetchContractorDetail(
     change_orders: (coRes.data ?? []) as ContractorChangeOrder[],
     requisitions: (reqRes.data ?? []) as ContractorRequisition[],
     schedule_tasks,
+    jobs,
     plan_link,
   };
 }

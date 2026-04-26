@@ -29,7 +29,7 @@ import { CalendarModule } from "@/components/modules/calendar/CalendarModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
-import { TasksModule } from "@/components/modules/tasks/TasksModule";
+import { WorkModule } from "@/components/modules/work/WorkModule";
 import { EstimatingModule } from "@/components/modules/estimating/EstimatingModule";
 import { PlansModule } from "@/components/modules/plans/PlansModule";
 import { BillingModule } from "@/components/modules/billing/BillingModule";
@@ -56,7 +56,7 @@ export const modules: ModuleDef[] = [
   { key: "materials",  label: "Materials",  icon: Package,       Component: MaterialsModule   },
   { key: "subs",       label: "Contractors", icon: Truck,        Component: SubsModule        },
   { key: "contacts",   label: "Contacts",   icon: Users,         Component: ContactsModule    },
-  { key: "tasks",      label: "Tasks",      icon: ListChecks,    Component: TasksModule       },
+  { key: "tasks",      label: "Work",       icon: ListChecks,    Component: WorkModule        },
   { key: "photos",     label: "Photos",     icon: ImageIcon,     Component: PhotosModule      },
   { key: "budget",     label: "Budget",     icon: Wallet,        Component: BudgetModule      },
   { key: "schedule",   label: "Schedule",   icon: BarChart3,     Component: ScheduleModule    },
