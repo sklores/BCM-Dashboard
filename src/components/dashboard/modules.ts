@@ -23,6 +23,7 @@ import { SubsModule } from "@/components/modules/subs/SubsModule";
 import { ContactsModule } from "@/components/modules/contacts/ContactsModule";
 import { PermitsModule } from "@/components/modules/permits/PermitsModule";
 import { NotesModule } from "@/components/modules/notes/NotesModule";
+import { ReportsModule } from "@/components/modules/reports/ReportsModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
@@ -47,7 +48,7 @@ export type ModuleDef = {
 };
 
 export const modules: ModuleDef[] = [
-  { key: "reports",    label: "Reports",    icon: FileText,      Component: PlaceholderModule },
+  { key: "reports",    label: "Reports",    icon: FileText,      Component: ReportsModule     },
   { key: "estimating", label: "Estimating", icon: Calculator,    Component: EstimatingModule  },
   { key: "paperwork",  label: "Paperwork",  icon: FileSignature, Component: PaperworkModule   },
   { key: "materials",  label: "Materials",  icon: Package,       Component: MaterialsModule   },
