@@ -65,9 +65,53 @@ export async function POST(req: Request) {
 
   const userContent: Anthropic.Messages.ContentBlockParam[] = [];
   if (isUrl) {
+    // Fetch on the server with a realistic browser User-Agent. Most
+    // bot-blocked sites pass with a UA + Accept header. We then send the
+    // page body to Claude as text (no server tools needed).
+    let html: string;
+    try {
+      const upstream = await fetch(body.url!, {
+        redirect: "follow",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      });
+      if (!upstream.ok) {
+        return NextResponse.json(
+          {
+            error: `URL fetch failed: ${upstream.status} ${upstream.statusText}. The site may block automated fetches — try uploading the spec sheet PDF instead.`,
+          },
+          { status: 502 },
+        );
+      }
+      html = await upstream.text();
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error:
+            "Couldn't reach that URL: " +
+            (err instanceof Error ? err.message : String(err)),
+        },
+        { status: 502 },
+      );
+    }
+
+    // Cap to keep prompt size reasonable. Truncate from the middle if huge.
+    const MAX = 180_000;
+    if (html.length > MAX) {
+      html =
+        html.slice(0, MAX / 2) +
+        "\n\n[…truncated…]\n\n" +
+        html.slice(html.length - MAX / 2);
+    }
+
     userContent.push({
       type: "text",
-      text: `${PROMPT_BASE}\n\nFetch this product page using the code execution tool (urllib or requests) and extract the details. URL: ${body.url}`,
+      text: `${PROMPT_BASE}\n\nThe HTML below is the product page at ${body.url}. Extract the product details.\n\nHTML:\n\n${html}`,
     });
   } else if (body.fileBase64 && body.mimeType) {
     if (body.mimeType === "application/pdf") {
@@ -120,21 +164,7 @@ export async function POST(req: Request) {
       },
     };
 
-    let response;
-    if (isUrl) {
-      // web_fetch_20260209 is only invokable from inside the
-      // code_execution_20260120 sandbox. Claude writes Python that uses
-      // urllib/requests to fetch the page, then produces the JSON answer.
-      response = await client.messages.create({
-        ...baseParams,
-        tools: [
-          { type: "code_execution_20260120", name: "code_execution" },
-          { type: "web_fetch_20260209", name: "web_fetch" },
-        ],
-      });
-    } else {
-      response = await client.messages.create(baseParams);
-    }
+    const response = await client.messages.create(baseParams);
 
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
