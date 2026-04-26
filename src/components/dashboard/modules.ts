@@ -30,6 +30,7 @@ import { EstimatingModule } from "@/components/modules/estimating/EstimatingModu
 import { BidSolicitationModule } from "@/components/modules/bid-solicitation/BidSolicitationModule";
 import { ContractsModule } from "@/components/modules/contracts/ContractsModule";
 import { ProposalsModule } from "@/components/modules/proposals/ProposalsModule";
+import { PlansModule } from "@/components/modules/plans/PlansModule";
 import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
 
 export type ModuleProps = {
@@ -54,7 +55,7 @@ export const modules: ModuleDef[] = [
   { key: "photos",    label: "Photos",    icon: ImageIcon,    Component: PhotosModule      },
   { key: "budget",    label: "Budget",    icon: DollarSign,   Component: PlaceholderModule },
   { key: "schedule",  label: "Schedule",  icon: BarChart3,    Component: ScheduleModule    },
-  { key: "plans",     label: "Plans",     icon: Map,          Component: PlaceholderModule },
+  { key: "plans",     label: "Plans",     icon: Map,          Component: PlansModule       },
   { key: "permits",   label: "Permits",   icon: ScrollText,   Component: PlaceholderModule },
   { key: "notes",     label: "Notes",     icon: StickyNote,   Component: PlaceholderModule },
   { key: "messages",  label: "Messages",  icon: Inbox,        Component: MessagesModule    },
