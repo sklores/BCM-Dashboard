@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarCheck,
   ClipboardCheck,
+  ClipboardList,
   Clock,
   DollarSign,
   Download,
@@ -137,6 +138,23 @@ const REPORTS: ReportDef[] = [
       "Major Milestones",
       "Completed Milestones",
       "Upcoming Milestones",
+    ],
+  },
+  {
+    id: "meeting_minutes",
+    name: "Meeting Minutes",
+    description:
+      "Formal published record of a meeting — attendees, notes summary, action items, and decisions, ready to distribute.",
+    group: "Client Facing",
+    icon: ClipboardList,
+    previewSections: [
+      "Meeting Header (name · date · location)",
+      "Attendees",
+      "Agenda / Topics",
+      "Notes Summary",
+      "Decisions",
+      "Action Items",
+      "Next Meeting",
     ],
   },
   {

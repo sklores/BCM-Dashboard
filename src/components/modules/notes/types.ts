@@ -42,6 +42,20 @@ export const PENDING_STATUS_STYLE: Record<PendingStatus, string> = {
   deferred: "bg-zinc-700/40 text-zinc-400 border-zinc-700",
 };
 
+export type TeamPadNote = {
+  id: string;
+  project_id: string;
+  title: string | null;
+  body: string | null;
+  last_edited_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TeamPadNotePatch = Partial<
+  Pick<TeamPadNote, "title" | "body" | "last_edited_by">
+>;
+
 export type ScratchNote = {
   id: string;
   project_id: string;

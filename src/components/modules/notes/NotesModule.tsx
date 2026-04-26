@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   CheckSquare,
-  FileText,
   Loader2,
   Mic,
   Plus,
@@ -24,29 +23,29 @@ import {
   createMeeting,
   createPendingItem,
   createScratchNote,
+  createTeamPadNote,
   deleteActionItem,
   deleteMeeting,
   deletePendingItem,
   deleteScratchNote,
-  ensureMinutesForMeeting,
+  deleteTeamPadNote,
   fetchActionItems,
   fetchAttendees,
   fetchContactOptions,
   fetchMeetings,
-  fetchMinutes,
   fetchPendingItems,
   fetchScratchNotes,
+  fetchTeamPadNotes,
   removeAttendee,
   updateActionItem,
   updateMeeting,
   updatePendingItem,
   updateScratchNote,
+  updateTeamPadNote,
 } from "./queries";
 import {
   MEETING_STATUS_LABEL,
   MEETING_STATUS_STYLE,
-  MINUTES_STATUS_LABEL,
-  MINUTES_STATUS_STYLE,
   PENDING_STATUSES,
   PENDING_STATUS_LABEL,
   PENDING_STATUS_STYLE,
@@ -59,7 +58,6 @@ import {
   type ContactOption,
   type Meeting,
   type MeetingAttendee,
-  type MeetingMinutes,
   type MeetingPatch,
   type MeetingStatus,
   type PendingItem,
@@ -68,9 +66,11 @@ import {
   type ScratchNote,
   type ScratchNotePatch,
   type TaggableModule,
+  type TeamPadNote,
+  type TeamPadNotePatch,
 } from "./types";
 
-type Section = "scratch" | "meetings" | "minutes" | "pending";
+type Section = "scratch" | "meetings" | "team_pad" | "pending";
 
 export function NotesModule({ projectId }: ModuleProps) {
   const role = useRole();
@@ -81,7 +81,7 @@ export function NotesModule({ projectId }: ModuleProps) {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [attendees, setAttendees] = useState<MeetingAttendee[]>([]);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
-  const [minutes, setMinutes] = useState<MeetingMinutes[]>([]);
+  const [teamPad, setTeamPad] = useState<TeamPadNote[]>([]);
   const [pending, setPending] = useState<PendingItem[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -89,6 +89,7 @@ export function NotesModule({ projectId }: ModuleProps) {
 
   const [openMeeting, setOpenMeeting] = useState<Meeting | null>(null);
   const [openNote, setOpenNote] = useState<ScratchNote | null>(null);
+  const [openPad, setOpenPad] = useState<TeamPadNote | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,17 +97,17 @@ export function NotesModule({ projectId }: ModuleProps) {
     setError(null);
     (async () => {
       try {
-        const [s, m, mi, pi, co] = await Promise.all([
+        const [s, m, tp, pi, co] = await Promise.all([
           fetchScratchNotes(projectId),
           fetchMeetings(projectId),
-          fetchMinutes(projectId),
+          fetchTeamPadNotes(projectId),
           fetchPendingItems(projectId),
           fetchContactOptions(projectId),
         ]);
         if (cancelled) return;
         setScratch(s);
         setMeetings(m);
-        setMinutes(mi);
+        setTeamPad(tp);
         setPending(pi);
         setContacts(co);
         const meetingIds = m.map((row) => row.id);
@@ -210,23 +211,12 @@ export function NotesModule({ projectId }: ModuleProps) {
 
   async function handleUpdateMeeting(id: string, patch: MeetingPatch) {
     const prev = meetings;
-    const prevMeeting = prev.find((m) => m.id === id);
     setMeetings((rows) =>
       rows.map((m) => (m.id === id ? { ...m, ...patch } : m)),
     );
     if (openMeeting?.id === id) setOpenMeeting({ ...openMeeting, ...patch });
     try {
       await updateMeeting(id, patch);
-      if (
-        patch.status === "published" &&
-        prevMeeting &&
-        prevMeeting.status !== "published"
-      ) {
-        const created = await ensureMinutesForMeeting(id, projectId);
-        setMinutes((rows) =>
-          rows.find((r) => r.id === created.id) ? rows : [created, ...rows],
-        );
-      }
     } catch (err) {
       setMeetings(prev);
       setError(err instanceof Error ? err.message : "Failed to save meeting");
@@ -335,6 +325,56 @@ export function NotesModule({ projectId }: ModuleProps) {
     }
   }
 
+  // ----- Team Pad handlers -----
+
+  async function handleAddTeamPad() {
+    try {
+      const created = await createTeamPadNote(projectId);
+      setTeamPad((rows) => [created, ...rows]);
+      setOpenPad(created);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add pad");
+    }
+  }
+
+  async function handleUpdateTeamPad(
+    id: string,
+    patch: TeamPadNotePatch,
+  ) {
+    const prev = teamPad;
+    setTeamPad((rows) =>
+      rows
+        .map((n) =>
+          n.id === id
+            ? { ...n, ...patch, updated_at: new Date().toISOString() }
+            : n,
+        )
+        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
+    );
+    if (openPad?.id === id)
+      setOpenPad({ ...openPad, ...patch, updated_at: new Date().toISOString() });
+    try {
+      await updateTeamPadNote(id, patch);
+    } catch (err) {
+      setTeamPad(prev);
+      setError(err instanceof Error ? err.message : "Failed to save pad");
+    }
+  }
+
+  async function handleDeleteTeamPad(id: string) {
+    if (!window.confirm("Delete this shared pad? This affects everyone."))
+      return;
+    const prev = teamPad;
+    setTeamPad((rows) => rows.filter((n) => n.id !== id));
+    if (openPad?.id === id) setOpenPad(null);
+    try {
+      await deleteTeamPadNote(id);
+    } catch (err) {
+      setTeamPad(prev);
+      setError(err instanceof Error ? err.message : "Failed to delete pad");
+    }
+  }
+
   // ----- Pending items handlers -----
 
   async function handleAddPending() {
@@ -390,7 +430,7 @@ export function NotesModule({ projectId }: ModuleProps) {
           [
             ["scratch", `Scratch Pad (${scratch.length})`],
             ["meetings", `Meeting Notes (${meetings.length})`],
-            ["minutes", `Meeting Minutes (${minutes.length})`],
+            ["team_pad", `Team Pad (${teamPad.length})`],
             ["pending", `Pending Items (${pending.filter((p) => p.status === "open").length})`],
           ] as const
         ).map(([key, label]) => {
@@ -441,8 +481,13 @@ export function NotesModule({ projectId }: ModuleProps) {
         />
       )}
 
-      {!loading && !error && section === "minutes" && (
-        <MinutesSection minutes={minutes} meetings={meetings} />
+      {!loading && !error && section === "team_pad" && (
+        <TeamPadSection
+          notes={teamPad}
+          editable={editable}
+          onAdd={handleAddTeamPad}
+          onOpen={setOpenPad}
+        />
       )}
 
       {!loading && !error && section === "pending" && (
@@ -465,6 +510,16 @@ export function NotesModule({ projectId }: ModuleProps) {
           onClose={() => setOpenNote(null)}
           onUpdate={handleUpdateScratch}
           onDelete={handleDeleteScratch}
+        />
+      )}
+
+      {openPad && (
+        <TeamPadModal
+          note={openPad}
+          editable={editable}
+          onClose={() => setOpenPad(null)}
+          onUpdate={handleUpdateTeamPad}
+          onDelete={handleDeleteTeamPad}
         />
       )}
 
@@ -879,7 +934,7 @@ function MeetingModal({
 
       <div className="mt-2 flex justify-between border-t border-zinc-800 pt-3">
         <p className="text-[11px] text-zinc-600">
-          Setting status to Published creates a Meeting Minutes record.
+          Generate the formal Meeting Minutes from the Reports module.
         </p>
         {editable && (
           <button
@@ -1310,74 +1365,149 @@ function ActionItemsEditor({
   );
 }
 
-// ---------- Minutes Section ----------
+// ---------- Team Pad Section ----------
 
-function MinutesSection({
-  minutes,
-  meetings,
+function TeamPadSection({
+  notes,
+  editable,
+  onAdd,
+  onOpen,
 }: {
-  minutes: MeetingMinutes[];
-  meetings: Meeting[];
+  notes: TeamPadNote[];
+  editable: boolean;
+  onAdd: () => Promise<void>;
+  onOpen: (n: TeamPadNote) => void;
 }) {
+  const [search, setSearch] = useState("");
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return notes;
+    return notes.filter((n) =>
+      [n.title ?? "", n.body ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    );
+  }, [notes, search]);
+
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-zinc-500">
-        Auto-generated when a meeting is published. PDF export and Distribute
-        ship in a follow-up.
-      </p>
-      {minutes.length === 0 ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search shared pads…"
+            className="w-72 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 pl-8 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <span className="text-xs text-zinc-600">
+          Visible to the whole team — last write wins (real-time sync coming
+          later)
+        </span>
+        {editable && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="ml-auto flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New pad
+          </button>
+        )}
+      </div>
+
+      {filtered.length === 0 ? (
         <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 p-6 text-center text-sm text-zinc-500">
-          No published meetings yet.
+          No shared pads yet.
         </div>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {minutes.map((m) => {
-            const meeting = meetings.find((x) => x.id === m.meeting_id);
-            return (
-              <li
-                key={m.id}
-                className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2.5"
-              >
-                <FileText className="h-4 w-4 text-zinc-500" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium text-zinc-100">
-                    {meeting?.meeting_name ?? "(meeting deleted)"}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-3 text-[11px] text-zinc-500">
-                    <span>{fmtDate(meeting?.date ?? null)}</span>
-                    <span>Generated {fmtDateTime(m.created_at)}</span>
-                    {m.distributed_at && (
-                      <span>Distributed {fmtDateTime(m.distributed_at)}</span>
-                    )}
-                  </div>
-                </div>
-                <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${MINUTES_STATUS_STYLE[m.status]}`}
-                >
-                  {MINUTES_STATUS_LABEL[m.status]}
-                </span>
-                <button
-                  type="button"
-                  disabled
-                  title="Coming soon"
-                  className="cursor-not-allowed rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-500"
-                >
-                  Export PDF
-                </button>
-                <button
-                  type="button"
-                  disabled
-                  title="Coming soon"
-                  className="cursor-not-allowed rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-500"
-                >
-                  Distribute
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => onOpen(n)}
+              className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+            >
+              <h3 className="line-clamp-1 text-sm font-medium text-zinc-100">
+                {n.title || "Untitled"}
+              </h3>
+              <p className="line-clamp-4 whitespace-pre-wrap text-xs text-zinc-400">
+                {n.body || "(empty)"}
+              </p>
+              <span className="mt-auto text-[10px] text-zinc-600">
+                Updated {fmtDateTime(n.updated_at)}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
+  );
+}
+
+function TeamPadModal({
+  note,
+  editable,
+  onClose,
+  onUpdate,
+  onDelete,
+}: {
+  note: TeamPadNote;
+  editable: boolean;
+  onClose: () => void;
+  onUpdate: (id: string, patch: TeamPadNotePatch) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  return (
+    <Modal title="Team Pad" icon={StickyNote} onClose={onClose}>
+      <Field label="Title" wide>
+        <input
+          type="text"
+          defaultValue={note.title ?? ""}
+          disabled={!editable}
+          onBlur={(e) => {
+            const v = e.target.value;
+            if (v !== (note.title ?? ""))
+              onUpdate(note.id, { title: v || null });
+          }}
+          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+        />
+      </Field>
+      <Field label="Body (markdown supported, shared with team)" wide>
+        <textarea
+          defaultValue={note.body ?? ""}
+          disabled={!editable}
+          rows={14}
+          onBlur={(e) => {
+            const v = e.target.value;
+            if (v !== (note.body ?? "")) onUpdate(note.id, { body: v });
+          }}
+          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+        />
+      </Field>
+      <p className="text-[11px] text-zinc-600">
+        Last updated {fmtDateTime(note.updated_at)}. Last-write-wins for now —
+        real-time multi-cursor sync lands in a follow-up.
+      </p>
+      <div className="mt-2 flex justify-end border-t border-zinc-800 pt-3">
+        {editable && (
+          <button
+            type="button"
+            onClick={() => {
+              onDelete(note.id);
+              onClose();
+            }}
+            className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"
+          >
+            Delete pad
+          </button>
+        )}
+      </div>
+    </Modal>
   );
 }
 

@@ -11,6 +11,8 @@ import type {
   PendingItemPatch,
   ScratchNote,
   ScratchNotePatch,
+  TeamPadNote,
+  TeamPadNotePatch,
 } from "./types";
 
 const SCRATCH_COLUMNS =
@@ -24,6 +26,9 @@ const MINUTES_COLUMNS =
   "id, meeting_id, project_id, status, pdf_url, distributed_at, created_at";
 const PENDING_COLUMNS =
   "id, project_id, description, raised_by, meeting_id, status, resolved_at, created_at";
+
+const TEAM_PAD_COLUMNS =
+  "id, project_id, title, body, last_edited_by, created_at, updated_at";
 
 // ---------- Scratch Notes ----------
 
@@ -322,6 +327,58 @@ export async function updatePendingItem(
 
 export async function deletePendingItem(id: string): Promise<void> {
   const { error } = await supabase.from("pending_items").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// ---------- Team Pad ----------
+
+export async function fetchTeamPadNotes(
+  projectId: string,
+): Promise<TeamPadNote[]> {
+  const { data, error } = await supabase
+    .from("team_pad_notes")
+    .select(TEAM_PAD_COLUMNS)
+    .eq("project_id", projectId)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as TeamPadNote[];
+}
+
+export async function createTeamPadNote(
+  projectId: string,
+): Promise<TeamPadNote> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("team_pad_notes")
+    .insert({
+      project_id: projectId,
+      title: "Untitled pad",
+      body: "",
+      created_at: now,
+      updated_at: now,
+    })
+    .select(TEAM_PAD_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data as TeamPadNote;
+}
+
+export async function updateTeamPadNote(
+  id: string,
+  patch: TeamPadNotePatch,
+): Promise<void> {
+  const { error } = await supabase
+    .from("team_pad_notes")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteTeamPadNote(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("team_pad_notes")
+    .delete()
+    .eq("id", id);
   if (error) throw error;
 }
 
