@@ -122,12 +122,10 @@ export async function POST(req: Request) {
 
     let response;
     if (isUrl) {
-      // web_fetch is a server tool that requires a beta header. Force the
-      // tool with tool_choice so Claude actually fetches the page rather
-      // than guessing/returning nulls.
-      response = await client.beta.messages.create({
+      // web_fetch is a server tool. tool_choice forces Claude to actually
+      // fetch the page rather than producing null JSON without trying.
+      response = await client.messages.create({
         ...baseParams,
-        betas: ["web-fetch-2026-02-09"],
         tools: [{ type: "web_fetch_20260209", name: "web_fetch" }],
         tool_choice: { type: "tool", name: "web_fetch" },
       });
