@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Trash2, X } from "lucide-react";
+import { Pencil, Trash2, X } from "lucide-react";
 import type { GroupMode, Photo } from "./types";
 
 function formatDate(s: string | null): string {
@@ -142,12 +142,14 @@ export function PhotoModal({
   onClose,
   onUpdate,
   onDelete,
+  onAnnotate,
 }: {
   photo: Photo;
   editable: boolean;
   onClose: () => void;
   onUpdate: (id: string, patch: { tags?: string[]; notes?: string | null }) => Promise<void>;
   onDelete: (photo: Photo) => Promise<void>;
+  onAnnotate?: (photo: Photo) => void;
 }) {
   const [tagInput, setTagInput] = useState(photo.tags.join(", "));
   const [notes, setNotes] = useState(photo.notes ?? "");
@@ -248,21 +250,39 @@ export function PhotoModal({
             />
           </label>
 
-          {editable && (
-            <button
-              type="button"
-              onClick={async () => {
-                if (window.confirm("Delete this photo?")) {
-                  await onDelete(photo);
-                  onClose();
-                }
-              }}
-              className="mt-auto flex items-center justify-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 transition hover:border-red-500/40 hover:text-red-400"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete photo
-            </button>
+          {photo.annotated_from_id && (
+            <p className="text-[11px] text-violet-300">
+              Annotated copy of an earlier photo.
+            </p>
           )}
+
+          <div className="mt-auto flex flex-col gap-2">
+            {editable && onAnnotate && (
+              <button
+                type="button"
+                onClick={() => onAnnotate(photo)}
+                className="flex items-center justify-center gap-2 rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-1.5 text-sm text-blue-300 transition hover:bg-blue-500/20"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Annotate
+              </button>
+            )}
+            {editable && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (window.confirm("Delete this photo?")) {
+                    await onDelete(photo);
+                    onClose();
+                  }
+                }}
+                className="flex items-center justify-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 transition hover:border-red-500/40 hover:text-red-400"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete photo
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

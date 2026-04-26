@@ -10,6 +10,7 @@ export type Photo = {
   ai_description: string | null;
   notes: string | null;
   uploaded_at: string;
+  annotated_from_id: string | null;
 };
 
 export type PhotoAnalysis = {

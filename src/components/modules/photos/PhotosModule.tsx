@@ -6,6 +6,7 @@ import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import { Uploader } from "./Uploader";
 import { Gallery, PhotoModal } from "./Gallery";
+import { PhotoAnnotator } from "./PhotoAnnotator";
 import {
   deletePhoto,
   fetchPhotos,
@@ -31,6 +32,7 @@ export function PhotosModule({ projectId }: ModuleProps) {
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Photo | null>(null);
+  const [annotating, setAnnotating] = useState<Photo | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,6 +217,22 @@ export function PhotosModule({ projectId }: ModuleProps) {
               onClose={() => setSelected(null)}
               onUpdate={handleUpdate}
               onDelete={handleDelete}
+              onAnnotate={(p) => {
+                setAnnotating(p);
+                setSelected(null);
+              }}
+            />
+          )}
+
+          {annotating && (
+            <PhotoAnnotator
+              photo={annotating}
+              onClose={() => setAnnotating(null)}
+              onSaved={(newPhoto) => {
+                setPhotos((rows) => [newPhoto, ...rows]);
+                setAnnotating(null);
+                setSelected(newPhoto);
+              }}
             />
           )}
         </>

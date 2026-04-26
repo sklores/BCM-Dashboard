@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { Photo } from "./types";
 
 const COLUMNS =
-  "id, project_id, storage_path, storage_url, taken_at, tags, room, stage, ai_description, notes, uploaded_at";
+  "id, project_id, storage_path, storage_url, taken_at, tags, room, stage, ai_description, notes, uploaded_at, annotated_from_id";
 
 export async function fetchPhotos(projectId: string): Promise<Photo[]> {
   const { data, error } = await supabase
@@ -44,6 +44,7 @@ export async function insertPhoto(row: {
   room: string | null;
   stage: string | null;
   ai_description: string | null;
+  annotated_from_id?: string | null;
 }): Promise<Photo> {
   const { data, error } = await supabase
     .from("photos")
