@@ -21,6 +21,7 @@ import {
   ensureCompanyCategories,
   fetchActivityForContact,
   fetchContacts,
+  isCategoryColumnMissing,
   updateCompany,
   updateContact,
   type ActivityRow,
@@ -55,6 +56,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [categoryMissing, setCategoryMissing] = useState(false);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleType | "all">("all");
   const [selection, setSelection] = useState<Selection>(null);
@@ -72,6 +74,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
         if (cancelled) return;
         setCompanies(cos);
         setContacts(cts);
+        setCategoryMissing(isCategoryColumnMissing());
       } catch (err) {
         if (!cancelled)
           setError(
@@ -141,16 +144,20 @@ export function ContactsModule({ projectId }: ModuleProps) {
         company: co,
         rows: contactsByCompany.get(co.id) ?? [],
       }));
-    if (uncategorizedCompanies.length > 0 || orphans.length > 0) {
+    const showUncategorized =
+      uncategorizedCompanies.length > 0 ||
+      orphans.length > 0 ||
+      categoryMissing;
+    if (showUncategorized) {
       sections.push({
         key: "__uncategorized__",
-        label: "Uncategorized",
+        label: categoryMissing ? "All companies" : "Uncategorized",
         category: null,
         companies: uncategorizedCompanies,
       });
     }
     return { sections, orphans };
-  }, [filteredContacts, companies]);
+  }, [filteredContacts, companies, categoryMissing]);
 
   async function handleAddCompany(category: CompanyCategory | null = null) {
     const name = window.prompt(
@@ -267,6 +274,18 @@ export function ContactsModule({ projectId }: ModuleProps) {
         </p>
       )}
 
+      {categoryMissing && (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+          Category buckets are turned off — apply{" "}
+          <code className="text-amber-200">
+            supabase/migrations/20260426000003_company_categories.sql
+          </code>{" "}
+          in Supabase to enable Bruno Clay Team / Contractors / Architect /
+          Engineer / MEPs / Client / Building grouping. The flat list below
+          still works in the meantime.
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
@@ -322,7 +341,12 @@ export function ContactsModule({ projectId }: ModuleProps) {
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           {/* List pane */}
           <div className="flex flex-col gap-4">
-            {groupedByCategory.sections.map((section) => (
+            {(categoryMissing
+              ? groupedByCategory.sections.filter(
+                  (s) => s.key === "__uncategorized__",
+                )
+              : groupedByCategory.sections
+            ).map((section) => (
               <div key={section.key} className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 px-1">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
@@ -346,7 +370,9 @@ export function ContactsModule({ projectId }: ModuleProps) {
                 </div>
                 {section.companies.length === 0 ? (
                   <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/30 p-3 text-xs text-zinc-500">
-                    Empty — click + to add the {section.label.toLowerCase()} company.
+                    {section.category
+                      ? `Empty — click + to add the ${section.label.toLowerCase()} company.`
+                      : "No companies yet — use Add company in the toolbar above."}
                   </div>
                 ) : (
                   section.companies.map(({ company, rows }) => (
