@@ -66,3 +66,22 @@ export async function removeSubFromProject(linkId: string): Promise<void> {
     .eq("id", linkId);
   if (error) throw error;
 }
+
+export async function bulkInsertSubs(rows: SubPatch[]): Promise<Sub[]> {
+  if (rows.length === 0) return [];
+  const payload = rows.map((r) => ({
+    name: r.name ?? "Unnamed",
+    trade: r.trade ?? null,
+    contact_name: r.contact_name ?? null,
+    contact_email: r.contact_email ?? null,
+    contact_phone: r.contact_phone ?? null,
+    license_number: r.license_number ?? null,
+    notes: r.notes ?? null,
+  }));
+  const { data, error } = await supabase
+    .from("subs")
+    .insert(payload)
+    .select(SUB_COLUMNS);
+  if (error) throw error;
+  return (data ?? []) as Sub[];
+}
