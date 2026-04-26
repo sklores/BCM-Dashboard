@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
+import { useFloatingNotes } from "@/components/floating-notes/FloatingNotes";
 import {
   addAttendee,
   convertActionItemToTask,
@@ -40,8 +41,6 @@ import {
   updateActionItem,
   updateMeeting,
   updatePendingItem,
-  updateScratchNote,
-  updateTeamPadNote,
 } from "./queries";
 import {
   MEETING_STATUS_LABEL,
@@ -64,10 +63,8 @@ import {
   type PendingItemPatch,
   type PendingStatus,
   type ScratchNote,
-  type ScratchNotePatch,
   type TaggableModule,
   type TeamPadNote,
-  type TeamPadNotePatch,
 } from "./types";
 
 type Section = "scratch" | "meetings" | "team_pad" | "pending";
@@ -75,6 +72,7 @@ type Section = "scratch" | "meetings" | "team_pad" | "pending";
 export function NotesModule({ projectId }: ModuleProps) {
   const role = useRole();
   const editable = canEdit(role) || role === "apm";
+  const floating = useFloatingNotes();
 
   const [section, setSection] = useState<Section>("scratch");
   const [scratch, setScratch] = useState<ScratchNote[]>([]);
@@ -88,8 +86,6 @@ export function NotesModule({ projectId }: ModuleProps) {
   const [error, setError] = useState<string | null>(null);
 
   const [openMeeting, setOpenMeeting] = useState<Meeting | null>(null);
-  const [openNote, setOpenNote] = useState<ScratchNote | null>(null);
-  const [openPad, setOpenPad] = useState<TeamPadNote | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,38 +132,16 @@ export function NotesModule({ projectId }: ModuleProps) {
     try {
       const created = await createScratchNote(projectId);
       setScratch((rows) => [created, ...rows]);
-      setOpenNote(created);
+      floating.openNote("scratch", created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add note");
     }
   }
 
-  async function handleUpdateScratch(id: string, patch: ScratchNotePatch) {
-    const prev = scratch;
-    setScratch((rows) =>
-      rows
-        .map((n) =>
-          n.id === id
-            ? { ...n, ...patch, updated_at: new Date().toISOString() }
-            : n,
-        )
-        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
-    );
-    if (openNote?.id === id)
-      setOpenNote({ ...openNote, ...patch, updated_at: new Date().toISOString() });
-    try {
-      await updateScratchNote(id, patch);
-    } catch (err) {
-      setScratch(prev);
-      setError(err instanceof Error ? err.message : "Failed to save note");
-    }
-  }
-
-  async function handleDeleteScratch(id: string) {
+  async function handleDeleteScratchInline(id: string) {
     if (!window.confirm("Delete this note?")) return;
     const prev = scratch;
     setScratch((rows) => rows.filter((n) => n.id !== id));
-    if (openNote?.id === id) setOpenNote(null);
     try {
       await deleteScratchNote(id);
     } catch (err) {
@@ -331,42 +305,17 @@ export function NotesModule({ projectId }: ModuleProps) {
     try {
       const created = await createTeamPadNote(projectId);
       setTeamPad((rows) => [created, ...rows]);
-      setOpenPad(created);
+      floating.openNote("team_pad", created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add pad");
     }
   }
 
-  async function handleUpdateTeamPad(
-    id: string,
-    patch: TeamPadNotePatch,
-  ) {
-    const prev = teamPad;
-    setTeamPad((rows) =>
-      rows
-        .map((n) =>
-          n.id === id
-            ? { ...n, ...patch, updated_at: new Date().toISOString() }
-            : n,
-        )
-        .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
-    );
-    if (openPad?.id === id)
-      setOpenPad({ ...openPad, ...patch, updated_at: new Date().toISOString() });
-    try {
-      await updateTeamPadNote(id, patch);
-    } catch (err) {
-      setTeamPad(prev);
-      setError(err instanceof Error ? err.message : "Failed to save pad");
-    }
-  }
-
-  async function handleDeleteTeamPad(id: string) {
+  async function handleDeleteTeamPadInline(id: string) {
     if (!window.confirm("Delete this shared pad? This affects everyone."))
       return;
     const prev = teamPad;
     setTeamPad((rows) => rows.filter((n) => n.id !== id));
-    if (openPad?.id === id) setOpenPad(null);
     try {
       await deleteTeamPadNote(id);
     } catch (err) {
@@ -466,7 +415,8 @@ export function NotesModule({ projectId }: ModuleProps) {
           notes={scratch}
           editable={editable}
           onAdd={handleAddScratch}
-          onOpen={setOpenNote}
+          onOpen={(n) => floating.openNote("scratch", n.id)}
+          onDelete={handleDeleteScratchInline}
         />
       )}
 
@@ -486,7 +436,8 @@ export function NotesModule({ projectId }: ModuleProps) {
           notes={teamPad}
           editable={editable}
           onAdd={handleAddTeamPad}
-          onOpen={setOpenPad}
+          onOpen={(n) => floating.openNote("team_pad", n.id)}
+          onDelete={handleDeleteTeamPadInline}
         />
       )}
 
@@ -500,26 +451,6 @@ export function NotesModule({ projectId }: ModuleProps) {
           onUpdate={handleUpdatePending}
           onResolve={handleResolvePending}
           onDelete={handleDeletePending}
-        />
-      )}
-
-      {openNote && (
-        <ScratchNoteModal
-          note={openNote}
-          editable={editable}
-          onClose={() => setOpenNote(null)}
-          onUpdate={handleUpdateScratch}
-          onDelete={handleDeleteScratch}
-        />
-      )}
-
-      {openPad && (
-        <TeamPadModal
-          note={openPad}
-          editable={editable}
-          onClose={() => setOpenPad(null)}
-          onUpdate={handleUpdateTeamPad}
-          onDelete={handleDeleteTeamPad}
         />
       )}
 
@@ -554,11 +485,13 @@ function ScratchSection({
   editable,
   onAdd,
   onOpen,
+  onDelete,
 }: {
   notes: ScratchNote[];
   editable: boolean;
   onAdd: () => Promise<void>;
   onOpen: (n: ScratchNote) => void;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -607,132 +540,48 @@ function ScratchSection({
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((n) => (
-            <button
+            <div
               key={n.id}
-              type="button"
-              onClick={() => onOpen(n)}
-              className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+              className="group relative flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-4 transition hover:border-zinc-700 hover:bg-zinc-900"
             >
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="line-clamp-1 text-sm font-medium text-zinc-100">
-                  {n.title || "Untitled"}
-                </h3>
-                {n.tagged_module && (
-                  <span className="shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-blue-300">
-                    {TAGGABLE_MODULE_LABEL[n.tagged_module as TaggableModule] ??
-                      n.tagged_module}
-                  </span>
-                )}
-              </div>
-              <p className="line-clamp-4 whitespace-pre-wrap text-xs text-zinc-400">
-                {n.body || "(empty)"}
-              </p>
-              <span className="mt-auto text-[10px] text-zinc-600">
-                Updated {fmtDateTime(n.updated_at)}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onOpen(n)}
+                className="flex flex-1 flex-col gap-2 text-left"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="line-clamp-1 text-sm font-medium text-zinc-100">
+                    {n.title || "Untitled"}
+                  </h3>
+                  {n.tagged_module && (
+                    <span className="shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-blue-300">
+                      {TAGGABLE_MODULE_LABEL[n.tagged_module as TaggableModule] ??
+                        n.tagged_module}
+                    </span>
+                  )}
+                </div>
+                <p className="line-clamp-4 whitespace-pre-wrap text-xs text-zinc-400">
+                  {n.body || "(empty)"}
+                </p>
+                <span className="mt-auto text-[10px] text-zinc-600">
+                  Updated {fmtDateTime(n.updated_at)}
+                </span>
+              </button>
+              {editable && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(n.id)}
+                  className="absolute right-2 top-2 rounded p-1 text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                  aria-label="Delete note"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
     </div>
-  );
-}
-
-function ScratchNoteModal({
-  note,
-  editable,
-  onClose,
-  onUpdate,
-  onDelete,
-}: {
-  note: ScratchNote;
-  editable: boolean;
-  onClose: () => void;
-  onUpdate: (id: string, patch: ScratchNotePatch) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-}) {
-  return (
-    <Modal title="Note" icon={StickyNote} onClose={onClose}>
-      <Field label="Title" wide>
-        <input
-          type="text"
-          defaultValue={note.title ?? ""}
-          disabled={!editable}
-          onBlur={(e) => {
-            const v = e.target.value;
-            if (v !== (note.title ?? ""))
-              onUpdate(note.id, { title: v || null });
-          }}
-          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-        />
-      </Field>
-      <Field label="Body (markdown supported)" wide>
-        <textarea
-          defaultValue={note.body ?? ""}
-          disabled={!editable}
-          rows={12}
-          onBlur={(e) => {
-            const v = e.target.value;
-            if (v !== (note.body ?? "")) onUpdate(note.id, { body: v });
-          }}
-          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-        />
-      </Field>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Tag to module">
-          <select
-            value={note.tagged_module ?? ""}
-            disabled={!editable}
-            onChange={(e) =>
-              onUpdate(note.id, {
-                tagged_module: e.target.value === "" ? null : e.target.value,
-                tagged_record_id: null,
-              })
-            }
-            className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
-          >
-            <option value="">— None —</option>
-            {TAGGABLE_MODULES.map((m) => (
-              <option key={m} value={m}>
-                {TAGGABLE_MODULE_LABEL[m]}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Record ID (optional)">
-          <input
-            type="text"
-            defaultValue={note.tagged_record_id ?? ""}
-            disabled={!editable || !note.tagged_module}
-            onBlur={(e) => {
-              const v = e.target.value.trim();
-              if (v !== (note.tagged_record_id ?? ""))
-                onUpdate(note.id, { tagged_record_id: v || null });
-            }}
-            placeholder="UUID of the record"
-            className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-          />
-        </Field>
-      </div>
-      <p className="text-[11px] text-zinc-600">
-        Tagged notes will surface inside the referenced module record once
-        those modules are wired to read scratch_notes — data is captured now.
-      </p>
-      <div className="mt-2 flex justify-end border-t border-zinc-800 pt-3">
-        {editable && (
-          <button
-            type="button"
-            onClick={() => {
-              onDelete(note.id);
-              onClose();
-            }}
-            className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"
-          >
-            Delete note
-          </button>
-        )}
-      </div>
-    </Modal>
   );
 }
 
@@ -1372,11 +1221,13 @@ function TeamPadSection({
   editable,
   onAdd,
   onOpen,
+  onDelete,
 }: {
   notes: TeamPadNote[];
   editable: boolean;
   onAdd: () => Promise<void>;
   onOpen: (n: TeamPadNote) => void;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
@@ -1426,88 +1277,40 @@ function TeamPadSection({
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.map((n) => (
-            <button
+            <div
               key={n.id}
-              type="button"
-              onClick={() => onOpen(n)}
-              className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-4 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+              className="group relative flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/60 p-4 transition hover:border-zinc-700 hover:bg-zinc-900"
             >
-              <h3 className="line-clamp-1 text-sm font-medium text-zinc-100">
-                {n.title || "Untitled"}
-              </h3>
-              <p className="line-clamp-4 whitespace-pre-wrap text-xs text-zinc-400">
-                {n.body || "(empty)"}
-              </p>
-              <span className="mt-auto text-[10px] text-zinc-600">
-                Updated {fmtDateTime(n.updated_at)}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => onOpen(n)}
+                className="flex flex-1 flex-col gap-2 text-left"
+              >
+                <h3 className="line-clamp-1 text-sm font-medium text-zinc-100">
+                  {n.title || "Untitled"}
+                </h3>
+                <p className="line-clamp-4 whitespace-pre-wrap text-xs text-zinc-400">
+                  {n.body || "(empty)"}
+                </p>
+                <span className="mt-auto text-[10px] text-zinc-600">
+                  Updated {fmtDateTime(n.updated_at)}
+                </span>
+              </button>
+              {editable && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(n.id)}
+                  className="absolute right-2 top-2 rounded p-1 text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                  aria-label="Delete pad"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
     </div>
-  );
-}
-
-function TeamPadModal({
-  note,
-  editable,
-  onClose,
-  onUpdate,
-  onDelete,
-}: {
-  note: TeamPadNote;
-  editable: boolean;
-  onClose: () => void;
-  onUpdate: (id: string, patch: TeamPadNotePatch) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-}) {
-  return (
-    <Modal title="Team Pad" icon={StickyNote} onClose={onClose}>
-      <Field label="Title" wide>
-        <input
-          type="text"
-          defaultValue={note.title ?? ""}
-          disabled={!editable}
-          onBlur={(e) => {
-            const v = e.target.value;
-            if (v !== (note.title ?? ""))
-              onUpdate(note.id, { title: v || null });
-          }}
-          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-        />
-      </Field>
-      <Field label="Body (markdown supported, shared with team)" wide>
-        <textarea
-          defaultValue={note.body ?? ""}
-          disabled={!editable}
-          rows={14}
-          onBlur={(e) => {
-            const v = e.target.value;
-            if (v !== (note.body ?? "")) onUpdate(note.id, { body: v });
-          }}
-          className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 font-mono text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-        />
-      </Field>
-      <p className="text-[11px] text-zinc-600">
-        Last updated {fmtDateTime(note.updated_at)}. Last-write-wins for now —
-        real-time multi-cursor sync lands in a follow-up.
-      </p>
-      <div className="mt-2 flex justify-end border-t border-zinc-800 pt-3">
-        {editable && (
-          <button
-            type="button"
-            onClick={() => {
-              onDelete(note.id);
-              onClose();
-            }}
-            className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"
-          >
-            Delete pad
-          </button>
-        )}
-      </div>
-    </Modal>
   );
 }
 

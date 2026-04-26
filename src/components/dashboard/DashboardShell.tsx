@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { RoleProvider } from "@/lib/role-context";
+import { FloatingNotesProvider } from "@/components/floating-notes/FloatingNotes";
 import { Sidebar } from "./Sidebar";
 import { SettingsModal } from "./SettingsModal";
 import { TopBar, type Project } from "./TopBar";
@@ -80,35 +81,37 @@ export function DashboardShell({ projects }: Props) {
 
   return (
     <RoleProvider role="owner">
-      <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
-        <TopBar
-          projects={projects}
-          activeProjectId={activeProjectId}
-          onProjectChange={setActiveProjectId}
-          onOpenSettings={() => setShowSettings(true)}
-        />
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <Sidebar
-            modules={orderedModules}
-            activeModule={activeModuleKey}
-            onModuleChange={setActiveModuleKey}
+      <FloatingNotesProvider projectId={activeProjectId}>
+        <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
+          <TopBar
+            projects={projects}
+            activeProjectId={activeProjectId}
+            onProjectChange={setActiveProjectId}
+            onOpenSettings={() => setShowSettings(true)}
           />
-          <main className="h-full flex-1 overflow-y-auto p-10">
-            <ActiveModule
-              projectId={activeProjectId}
-              moduleKey={moduleDef.key}
-              moduleLabel={moduleDef.label}
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <Sidebar
+              modules={orderedModules}
+              activeModule={activeModuleKey}
+              onModuleChange={setActiveModuleKey}
             />
-          </main>
+            <main className="h-full flex-1 overflow-y-auto p-10">
+              <ActiveModule
+                projectId={activeProjectId}
+                moduleKey={moduleDef.key}
+                moduleLabel={moduleDef.label}
+              />
+            </main>
+          </div>
+          {showSettings && (
+            <SettingsModal
+              modules={orderedModules}
+              onClose={() => setShowSettings(false)}
+              onReorder={handleReorder}
+            />
+          )}
         </div>
-        {showSettings && (
-          <SettingsModal
-            modules={orderedModules}
-            onClose={() => setShowSettings(false)}
-            onReorder={handleReorder}
-          />
-        )}
-      </div>
+      </FloatingNotesProvider>
     </RoleProvider>
   );
 }
