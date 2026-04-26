@@ -211,8 +211,10 @@ export function PhotoAnnotator({
     return r.width === 0 ? 1 : r.width / canvas.width;
   }
   // The on-screen pixel size we want for text (matches the input).
+  // Reduced multiplier so slider 20 is a reasonable header size, not larger
+  // than the photo itself.
   function desiredScreenFontPx(): number {
-    return Math.max(14, size * 4);
+    return Math.max(12, size * 1.5);
   }
   // Convert that to canvas pixels for the actual draw.
   function canvasFontPx(): number {

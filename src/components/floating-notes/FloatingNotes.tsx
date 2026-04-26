@@ -44,6 +44,12 @@ type FloatingNotesContextValue = {
   open: () => void;
   close: () => void;
   toggle: () => void;
+  /** Open the notes window AND immediately request the OS-level PiP
+   *  popout. Falls back to the in-browser draggable window if the
+   *  Document Picture-in-Picture API isn't supported. */
+  openInPiP: () => void;
+  pendingPopOut: boolean;
+  consumePendingPopOut: () => void;
   activeTab: FloatingTab;
   setActiveTab: (tab: FloatingTab) => void;
   activeNoteId: string | null;
@@ -116,6 +122,7 @@ export function FloatingNotesProvider({
   // Window position + size + open
   const [persisted, setPersisted] = useState<PersistedState>(defaultState);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [pendingPopOut, setPendingPopOut] = useState(false);
 
   useEffect(() => {
     setPersisted(loadState());
@@ -155,18 +162,42 @@ export function FloatingNotesProvider({
     [],
   );
 
+  const openInPiP = useCallback(() => {
+    setPersisted((s) => ({ ...s, isOpen: true }));
+    setPendingPopOut(true);
+  }, []);
+
+  const consumePendingPopOut = useCallback(() => {
+    setPendingPopOut(false);
+  }, []);
+
   const ctx = useMemo<FloatingNotesContextValue>(
     () => ({
       isOpen: persisted.isOpen,
       open,
       close,
       toggle,
+      openInPiP,
+      pendingPopOut,
+      consumePendingPopOut,
       activeTab: persisted.activeTab,
       setActiveTab,
       activeNoteId,
       openNote,
     }),
-    [persisted.isOpen, persisted.activeTab, activeNoteId, open, close, toggle, setActiveTab, openNote],
+    [
+      persisted.isOpen,
+      persisted.activeTab,
+      activeNoteId,
+      open,
+      close,
+      toggle,
+      openInPiP,
+      pendingPopOut,
+      consumePendingPopOut,
+      setActiveTab,
+      openNote,
+    ],
   );
 
   return (
@@ -187,18 +218,27 @@ export function FloatingNotesProvider({
 // ---------- FAB ----------
 
 function FloatingNotesFab() {
-  const { isOpen, toggle } = useFloatingNotes();
+  const { isOpen, close, openInPiP } = useFloatingNotes();
+  function handleClick() {
+    if (isOpen) {
+      close();
+    } else {
+      // Try to pop out into a real OS-level window. If unsupported, the
+      // window component falls back to the in-browser draggable panel.
+      openInPiP();
+    }
+  }
   return (
     <button
       type="button"
-      onClick={toggle}
-      title={isOpen ? "Hide notes" : "Show notes"}
+      onClick={handleClick}
+      title={isOpen ? "Hide notes" : "Open notes"}
       className={`fixed bottom-6 right-6 z-30 flex h-12 w-12 items-center justify-center rounded-full border shadow-lg transition ${
         isOpen
           ? "border-blue-500/40 bg-blue-500/15 text-blue-300"
           : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
       }`}
-      aria-label="Toggle notes"
+      aria-label="Open notes"
     >
       <StickyNote className="h-5 w-5" />
     </button>
@@ -223,7 +263,8 @@ function FloatingNotesWindow({
   activeNoteId: string | null;
   setActiveNoteId: (id: string | null) => void;
 }) {
-  const { activeTab, setActiveTab, close, isOpen } = useFloatingNotes();
+  const { activeTab, setActiveTab, close, isOpen, pendingPopOut, consumePendingPopOut } =
+    useFloatingNotes();
 
   const [scratch, setScratch] = useState<ScratchNote[]>([]);
   const [teamPad, setTeamPad] = useState<TeamPadNote[]>([]);
@@ -432,6 +473,25 @@ function FloatingNotesWindow({
     if (pipWindow && !pipWindow.closed) pipWindow.close();
     setPipWindow(null);
   }
+
+  // The FAB sets pendingPopOut to request the OS-level window. Honour it as
+  // soon as we render (must be inside a user-gesture-derived stack — React
+  // batches the setState from FAB synchronously into this render).
+  useEffect(() => {
+    if (!pendingPopOut) return;
+    if (pipWindow) {
+      consumePendingPopOut();
+      return;
+    }
+    if (!pipSupported) {
+      // Silently fall through to the in-browser draggable window.
+      consumePendingPopOut();
+      return;
+    }
+    consumePendingPopOut();
+    void popOut();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingPopOut, pipWindow, pipSupported]);
 
   if (!isOpen && !pipWindow) return null;
 

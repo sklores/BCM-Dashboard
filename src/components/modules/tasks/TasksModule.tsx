@@ -11,6 +11,8 @@ import {
   ListChecks,
   Loader2,
   Paperclip,
+  Maximize2,
+  Minimize2,
   Plus,
   RotateCw,
   Upload,
@@ -86,6 +88,17 @@ export function TasksModule({ projectId }: ModuleProps) {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<TaskType | "all">("all");
   const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date());
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Esc to exit fullscreen
+  useEffect(() => {
+    if (!fullscreen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setFullscreen(false);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
 
   useEffect(() => {
     if (role === "super") return;
@@ -325,7 +338,13 @@ export function TasksModule({ projectId }: ModuleProps) {
   const punchPct = punchTotal === 0 ? 0 : Math.round((punchDone / punchTotal) * 100);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className={
+        fullscreen
+          ? "fixed inset-0 z-40 flex flex-col gap-6 overflow-y-auto bg-zinc-950 p-10"
+          : "flex flex-col gap-6"
+      }
+    >
       <div className="flex flex-wrap items-center gap-3">
         <ListChecks className="h-6 w-6 text-blue-400" />
         <h1 className="text-2xl font-semibold text-zinc-100">
@@ -333,8 +352,22 @@ export function TasksModule({ projectId }: ModuleProps) {
         </h1>
         <button
           type="button"
+          onClick={() => setFullscreen((v) => !v)}
+          className="ml-auto flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+          aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+          title={fullscreen ? "Exit full screen (Esc)" : "Full screen"}
+        >
+          {fullscreen ? (
+            <Minimize2 className="h-3.5 w-3.5" />
+          ) : (
+            <Maximize2 className="h-3.5 w-3.5" />
+          )}
+          {fullscreen ? "Exit full screen" : "Full screen"}
+        </button>
+        <button
+          type="button"
           onClick={() => setPunchMode((v) => !v)}
-          className={`ml-auto flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs transition ${
+          className={`flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs transition ${
             punchMode
               ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
               : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
