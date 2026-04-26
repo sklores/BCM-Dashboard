@@ -21,6 +21,7 @@ import { SubsModule } from "@/components/modules/subs/SubsModule";
 import { TeamModule } from "@/components/modules/team/TeamModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
+import { PhotosModule } from "@/components/modules/photos/PhotosModule";
 import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
 
 export type ModuleProps = {
@@ -42,7 +43,7 @@ export const modules: ModuleDef[] = [
   { key: "subs",      label: "Subs",      icon: HardHat,      Component: SubsModule       },
   { key: "team",      label: "Team",      icon: Users,        Component: TeamModule       },
   { key: "tasks",     label: "Tasks",     icon: ListChecks,   Component: PlaceholderModule },
-  { key: "photos",    label: "Photos",    icon: ImageIcon,    Component: PlaceholderModule },
+  { key: "photos",    label: "Photos",    icon: ImageIcon,    Component: PhotosModule      },
   { key: "budget",    label: "Budget",    icon: DollarSign,   Component: PlaceholderModule },
   { key: "schedule",  label: "Schedule",  icon: BarChart3,    Component: ScheduleModule    },
   { key: "plans",     label: "Plans",     icon: Map,          Component: PlaceholderModule },
