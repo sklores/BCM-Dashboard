@@ -13,7 +13,7 @@ Desktop only for now. Two persistent navigation surfaces:
 - **Top horizontal bar** — job site address + dropdown to switch projects
 - **Right vertical bar** — module tabs
 
-## FINAL MODULE LIST - 17 TABS IN THIS ORDER
+## FINAL MODULE LIST - 16 TABS IN THIS ORDER
 
 1. Reports
 2. Estimating
@@ -29,9 +29,8 @@ Desktop only for now. Two persistent navigation surfaces:
 12. Permits
 13. Notes
 14. Calendar
-15. Client
-16. Messages
-17. Billing
+15. Messages
+16. Billing
 
 ## MODULE ARCHITECTURE
 
@@ -51,7 +50,7 @@ Document factory. Seven document types generated from templates pre-populated wi
 
 Document types:
 
-- Client Contract: pulls from Client module, project address, contract terms
+- Client Contract: pulls from project record, project address, contract terms
 - Subcontractor Agreement: pulls from Subs module, scope, contract value, triggered automatically from Bid Leveling award
 - SOW: pulls from Schedule phases and tasks for selected sub
 - RFP: pulls from Subs module, trade, scope written fresh per request
@@ -91,10 +90,6 @@ Annotations: all pins across all drawings in one list.
 
 Inbound project email via Postmark webhook. Each project has auto-generated email address from street address. All project members see full thread. V2 adds super field messages from mobile. V3 adds Microsoft Graph API.
 
-## CLIENT MODULE
-
-Contains: client contact info, proposals sent to that client, prime contract, client billing summary, client-facing messages, shareable read-only milestone link from Schedule module.
-
 ## SCHEDULE MODULE
 
 Three views: Simple Gantt, Detailed Gantt, Milestone.
@@ -123,10 +118,8 @@ This table is the event bus for all future notifications including mobile push, 
 
 - Schedule → Billing: sub requisitions validated against task completion status
 - Schedule → Alerts: delayed tasks with dependent tasks trigger alerts
-- Schedule → Client: shareable milestone link
 - Messages → Billing: sub requisition emails received in Messages reviewed in Billing
 - Paperwork → Subs: subcontractor agreements pull sub data
-- Paperwork → Client: proposals and contracts pull client data
 - Paperwork → Schedule: SOW pulls from schedule phases
 - Paperwork → Billing: requisitions pull from billing data
 - Estimating → Paperwork: bid leveling award triggers subcontractor agreement

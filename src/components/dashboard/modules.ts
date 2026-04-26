@@ -12,7 +12,6 @@ import {
   ScrollText,
   StickyNote,
   CalendarDays,
-  Building2,
   Inbox,
   Calculator,
   FileSignature,
@@ -28,7 +27,6 @@ import { PhotosModule } from "@/components/modules/photos/PhotosModule";
 import { TasksModule } from "@/components/modules/tasks/TasksModule";
 import { EstimatingModule } from "@/components/modules/estimating/EstimatingModule";
 import { PlansModule } from "@/components/modules/plans/PlansModule";
-import { ClientModule } from "@/components/modules/client/ClientModule";
 import { BillingModule } from "@/components/modules/billing/BillingModule";
 import { PaperworkModule } from "@/components/modules/paperwork/PaperworkModule";
 import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
@@ -61,7 +59,6 @@ export const modules: ModuleDef[] = [
   { key: "permits",    label: "Permits",    icon: ScrollText,    Component: PlaceholderModule },
   { key: "notes",      label: "Notes",      icon: StickyNote,    Component: PlaceholderModule },
   { key: "calendar",   label: "Calendar",   icon: CalendarDays,  Component: PlaceholderModule },
-  { key: "client",     label: "Client",     icon: Building2,     Component: ClientModule      },
   { key: "messages",   label: "Messages",   icon: Inbox,         Component: MessagesModule    },
   { key: "billing",    label: "Billing",    icon: DollarSign,    Component: BillingModule     },
 ];

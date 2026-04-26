@@ -26,7 +26,7 @@ import {
 } from "./queries";
 import type { Material, MaterialPhoto } from "./types";
 
-type Section = "catalog" | "finish";
+type Section = "catalog" | "detailed" | "finish";
 
 type ImportedFields = {
   product_name: string | null;
@@ -245,6 +245,7 @@ export function MaterialsModule({ projectId }: ModuleProps) {
         {(
           [
             ["catalog", "Catalog"],
+            ["detailed", "Detailed List"],
             ["finish", "Finish Schedule"],
           ] as const
         ).map(([key, label]) => {
@@ -486,6 +487,10 @@ export function MaterialsModule({ projectId }: ModuleProps) {
         </>
       )}
 
+      {!loading && !error && section === "detailed" && (
+        <DetailedListPlaceholder materials={materials} />
+      )}
+
       {!loading && !error && section === "finish" && (
         <FinishScheduleSection
           materials={materials.filter((m) => m.is_finish)}
@@ -497,6 +502,110 @@ export function MaterialsModule({ projectId }: ModuleProps) {
           onDeletePhoto={handleDeletePhoto}
         />
       )}
+    </div>
+  );
+}
+
+type DetailedStatus = "looking" | "found" | "purchased" | "onsite";
+
+const DETAILED_STATUS_LABEL: Record<DetailedStatus, string> = {
+  looking: "Looking",
+  found: "Found",
+  purchased: "Purchased",
+  onsite: "On site",
+};
+
+const DETAILED_STATUS_STYLE: Record<DetailedStatus, string> = {
+  looking: "bg-zinc-800 text-zinc-300 border-zinc-700",
+  found: "bg-blue-500/10 text-blue-300 border-blue-500/30",
+  purchased: "bg-amber-500/10 text-amber-300 border-amber-500/30",
+  onsite: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+};
+
+function DetailedListPlaceholder({ materials }: { materials: Material[] }) {
+  const sample: Array<{ name: string; status: DetailedStatus }> =
+    materials.length > 0
+      ? materials.slice(0, 6).map((m, i) => ({
+          name: m.product_name,
+          status: (
+            ["looking", "found", "purchased", "onsite"] as DetailedStatus[]
+          )[i % 4],
+        }))
+      : [
+          { name: "Sample item — kitchen tile", status: "looking" },
+          { name: "Sample item — vanity faucet", status: "found" },
+          { name: "Sample item — pendant lights", status: "purchased" },
+          { name: "Sample item — interior doors", status: "onsite" },
+        ];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 p-4 text-sm">
+        <div className="flex items-center gap-2 text-zinc-300">
+          <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs text-blue-300">
+            Placeholder
+          </span>
+          <span>Detailed List — UI preview only</span>
+        </div>
+        <p className="mt-2 text-xs text-zinc-500">
+          Will track status (Looking / Found / Purchased / On site), dimensions,
+          quantity, photos, and supplier links per item. Not wired to the
+          database yet.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {(Object.keys(DETAILED_STATUS_LABEL) as DetailedStatus[]).map((s) => (
+          <span
+            key={s}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${DETAILED_STATUS_STYLE[s]}`}
+          >
+            {DETAILED_STATUS_LABEL[s]}
+          </span>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto rounded-md border border-zinc-800 opacity-80">
+        <table className="w-full min-w-[820px] text-sm">
+          <thead>
+            <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
+              <th className="px-3 py-2 font-medium">Item</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Dimensions</th>
+              <th className="px-3 py-2 font-medium">Qty</th>
+              <th className="px-3 py-2 font-medium">Supplier</th>
+              <th className="px-3 py-2 font-medium">Photos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sample.map((row, i) => (
+              <tr key={i} className="border-b border-zinc-900">
+                <td className="px-3 py-2 text-zinc-300">{row.name}</td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${DETAILED_STATUS_STYLE[row.status]}`}
+                  >
+                    {DETAILED_STATUS_LABEL[row.status]}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-zinc-500">—</td>
+                <td className="px-3 py-2 text-zinc-500">—</td>
+                <td className="px-3 py-2 text-zinc-500">—</td>
+                <td className="px-3 py-2">
+                  <div className="flex gap-1">
+                    {Array.from({ length: 3 }).map((_, j) => (
+                      <div
+                        key={j}
+                        className="h-8 w-8 rounded border border-dashed border-zinc-700 bg-zinc-900"
+                      />
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
