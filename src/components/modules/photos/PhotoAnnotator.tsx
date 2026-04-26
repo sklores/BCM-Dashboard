@@ -606,6 +606,39 @@ export function PhotoAnnotator({
         </button>
 
         <div className="ml-auto flex items-center gap-2">
+          {tool === "screenshot" && cropRect && (
+            <>
+              <span className="text-[11px] text-zinc-400">
+                {Math.round(Math.abs(cropRect.w))}×
+                {Math.round(Math.abs(cropRect.h))}
+              </span>
+              <button
+                type="button"
+                onClick={cancelScreenshot}
+                disabled={savingScreenshot}
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 hover:border-zinc-700 disabled:opacity-40"
+              >
+                Cancel crop
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveScreenshot}
+                disabled={
+                  savingScreenshot ||
+                  Math.abs(cropRect.w) < 8 ||
+                  Math.abs(cropRect.h) < 8
+                }
+                className="flex items-center gap-1 rounded-md border border-blue-500/40 bg-blue-500/15 px-3 py-1 text-xs text-blue-300 transition hover:bg-blue-500/25 disabled:opacity-40"
+              >
+                {savingScreenshot ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Camera className="h-3.5 w-3.5" />
+                )}
+                Save screenshot
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -683,18 +716,6 @@ export function PhotoAnnotator({
             />
           )}
 
-          {cropRect &&
-            tool === "screenshot" &&
-            Math.abs(cropRect.w) >= 8 &&
-            Math.abs(cropRect.h) >= 8 && (
-              <ScreenshotCommit
-                overlay={overlayCanvasRef}
-                rect={cropRect}
-                onSave={handleSaveScreenshot}
-                onCancel={cancelScreenshot}
-                saving={savingScreenshot}
-              />
-            )}
         </div>
 
         <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1 text-[11px] text-zinc-400">
@@ -800,64 +821,3 @@ function TextEntryOverlay({
   );
 }
 
-function ScreenshotCommit({
-  overlay,
-  rect,
-  onSave,
-  onCancel,
-  saving,
-}: {
-  overlay: React.RefObject<HTMLCanvasElement | null>;
-  rect: { x: number; y: number; w: number; h: number };
-  onSave: () => void;
-  onCancel: () => void;
-  saving: boolean;
-}) {
-  const c = overlay.current;
-  const dispRect = c?.getBoundingClientRect();
-  const scaleX = dispRect && c ? dispRect.width / c.width : 1;
-  const scaleY = dispRect && c ? dispRect.height / c.height : 1;
-  // Anchor the action panel just below the bottom-right of the crop rect, in
-  // display coords. Clamp into view so it stays clickable when crops are at
-  // the edge.
-  const x = Math.min(rect.x, rect.x + rect.w);
-  const y = Math.min(rect.y, rect.y + rect.h);
-  const w = Math.abs(rect.w);
-  const h = Math.abs(rect.h);
-  const left = (x + w) * scaleX;
-  const top = (y + h) * scaleY + 8;
-  return (
-    <div
-      className="absolute z-20 flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/95 px-2 py-1 shadow-lg"
-      style={{ left, top, transform: "translateX(-100%)" }}
-      onClick={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      <span className="text-[10px] text-zinc-500">
-        {Math.round(w)}×{Math.round(h)}
-      </span>
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={saving}
-        className="flex items-center gap-1 rounded-md border border-blue-500/40 bg-blue-500/15 px-2 py-1 text-[11px] text-blue-300 hover:bg-blue-500/25 disabled:opacity-40"
-      >
-        {saving ? (
-          <Loader2 className="h-3 w-3 animate-spin" />
-        ) : (
-          <Camera className="h-3 w-3" />
-        )}
-        Save screenshot
-      </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        disabled={saving}
-        className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40"
-        aria-label="Cancel screenshot"
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </div>
-  );
-}

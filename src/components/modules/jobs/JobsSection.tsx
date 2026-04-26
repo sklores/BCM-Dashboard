@@ -86,8 +86,19 @@ export function JobsSection({
         setDrawingOptions(dwgs);
         setExtractionOptions(exts);
       } catch (err) {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : "Failed to load jobs");
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : "Failed to load jobs";
+          if (
+            msg.toLowerCase().includes("relation") &&
+            msg.toLowerCase().includes("does not exist")
+          ) {
+            setError(
+              "Jobs schema isn't set up yet. Apply the migration supabase/migrations/20260426000002_jobs.sql in Supabase, then reload.",
+            );
+          } else {
+            setError(msg);
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -103,7 +114,17 @@ export function JobsSection({
       setJobs((rows) => [created, ...rows]);
       setExpanded((s) => new Set([...s, created.id]));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add job");
+      const msg = err instanceof Error ? err.message : "Failed to add job";
+      if (
+        msg.toLowerCase().includes("relation") &&
+        msg.toLowerCase().includes("does not exist")
+      ) {
+        setError(
+          "Jobs schema isn't set up yet. Apply supabase/migrations/20260426000002_jobs.sql in Supabase, then reload.",
+        );
+      } else {
+        setError(msg);
+      }
     }
   }
 
