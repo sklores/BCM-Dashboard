@@ -190,14 +190,17 @@ export function PhotoAnnotator({
     const [x, y] = pointerPos(e);
     if (tool === "pen") {
       setDrawing({ kind: "pen", color, size, points: [[x, y]] });
+      (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     } else if (tool === "rect") {
       setDrawing({ kind: "rect", color, size, x, y, w: 0, h: 0 });
+      (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     } else if (tool === "arrow") {
       setDrawing({ kind: "arrow", color, size, x1: x, y1: y, x2: x, y2: y });
+      (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     } else if (tool === "text") {
+      // Don't capture pointer — the text input needs to take focus.
       setTextPrompt({ x, y, value: "" });
     }
-    (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -454,14 +457,12 @@ export function PhotoAnnotator({
 
           {textPrompt && (
             <TextEntryOverlay
-              container={containerRef}
               overlay={overlayCanvasRef}
               prompt={textPrompt}
               setPrompt={setTextPrompt}
               onCommit={commitText}
               onCancel={cancelText}
               color={color}
-              size={size}
             />
           )}
         </div>
@@ -482,16 +483,13 @@ export function PhotoAnnotator({
 }
 
 function TextEntryOverlay({
-  container,
   overlay,
   prompt,
   setPrompt,
   onCommit,
   onCancel,
   color,
-  size,
 }: {
-  container: React.RefObject<HTMLDivElement | null>;
   overlay: React.RefObject<HTMLCanvasElement | null>;
   prompt: { x: number; y: number; value: string };
   setPrompt: React.Dispatch<
@@ -500,23 +498,24 @@ function TextEntryOverlay({
   onCommit: () => void;
   onCancel: () => void;
   color: string;
-  size: number;
 }) {
-  // Convert canvas-space (x, y) → DOM pixels relative to the overlay element
+  // Position is computed relative to the canvas's parent (the wrapping
+  // relative div). The overlay canvas fills its parent via inset-0, so
+  // canvas-pixel (x, y) translates to parent-px via the canvas's display
+  // ratio.
   const c = overlay.current;
-  const rect = c?.getBoundingClientRect();
-  const cont = container.current?.getBoundingClientRect();
-  if (!rect || !cont || !c) return null;
+  if (!c) return null;
+  const rect = c.getBoundingClientRect();
+  if (rect.width === 0) return null;
   const scaleX = rect.width / c.width;
   const scaleY = rect.height / c.height;
-  const left = rect.left - cont.left + prompt.x * scaleX;
-  const top = rect.top - cont.top + prompt.y * scaleY;
-  const fontPx = Math.max(12, size * 6) * Math.max(scaleX, scaleY);
+  const left = prompt.x * scaleX;
+  const top = prompt.y * scaleY;
 
   return (
     <div
-      className="absolute"
-      style={{ left, top, transform: "translateY(-2px)" }}
+      className="absolute z-10"
+      style={{ left, top, transform: "translateY(-4px)" }}
     >
       <input
         autoFocus
@@ -526,17 +525,22 @@ function TextEntryOverlay({
           setPrompt((p) => (p ? { ...p, value: e.target.value } : p))
         }
         onKeyDown={(e) => {
-          if (e.key === "Enter") onCommit();
-          else if (e.key === "Escape") onCancel();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onCommit();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
+          }
         }}
         onBlur={onCommit}
-        placeholder="Type and press Enter…"
-        className="rounded border border-zinc-700 bg-zinc-950/90 px-1.5 py-0.5 outline-none focus:border-blue-500"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        placeholder="Type, then Enter"
+        className="rounded border border-blue-500 bg-zinc-950/95 px-1.5 py-0.5 text-sm font-bold outline-none shadow-lg"
         style={{
           color,
-          fontSize: `${fontPx}px`,
-          fontWeight: 700,
-          minWidth: `${fontPx * 4}px`,
+          minWidth: "120px",
         }}
       />
     </div>
