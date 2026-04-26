@@ -3,6 +3,20 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* BCM Light theme tokens */
+  --bcm-bg: #f8f6f2;
+  --bcm-card: #ffffff;
+  --bcm-text: #1a1a1a;
+  --bcm-text-muted: #6b6b6b;
+  --bcm-border: #e2ddd6;
+  --bcm-divider: #edebe7;
+  --bcm-heading: #1c2b4a;
+  --bcm-sidebar: #1c2b4a;
+  --bcm-sidebar-active: #162338;
+  --bcm-accent: #c49a2a;
+  --bcm-accent-hover: #a8821f;
+  --bcm-card-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 @theme inline {
@@ -23,4 +37,178 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ============================================================
+   BCM LIGHT MODE
+   Activated by adding `bcm-light` class to <html>. Dark mode is
+   the default and stays unchanged. The sidebar and top bar keep
+   their dark navy treatment in BOTH modes — only the main content
+   area, cards, and floating surfaces switch to warm white.
+   ============================================================ */
+
+html.bcm-light body {
+  background: var(--bcm-bg);
+  color: var(--bcm-text);
+}
+
+/* --- Backgrounds --- */
+html.bcm-light .bg-zinc-950,
+html.bcm-light [class*="bg-zinc-950\\/"] {
+  background-color: var(--bcm-bg) !important;
+}
+html.bcm-light .bg-zinc-900,
+html.bcm-light [class*="bg-zinc-900\\/"],
+html.bcm-light .bg-zinc-800,
+html.bcm-light [class*="bg-zinc-800\\/"] {
+  background-color: var(--bcm-card) !important;
+}
+
+/* --- Text --- */
+html.bcm-light .text-zinc-100,
+html.bcm-light .text-zinc-200,
+html.bcm-light .text-zinc-300 {
+  color: var(--bcm-text) !important;
+}
+html.bcm-light .text-zinc-400,
+html.bcm-light .text-zinc-500 {
+  color: var(--bcm-text-muted) !important;
+}
+html.bcm-light .text-zinc-600 {
+  color: #9a9a9a !important;
+}
+html.bcm-light h1,
+html.bcm-light h2,
+html.bcm-light h3 {
+  color: var(--bcm-heading);
+}
+
+/* --- Borders & dividers --- */
+html.bcm-light .border-zinc-800,
+html.bcm-light .border-zinc-700 {
+  border-color: var(--bcm-border) !important;
+}
+html.bcm-light .border-zinc-900 {
+  border-color: var(--bcm-divider) !important;
+}
+html.bcm-light .divide-zinc-800 > :not([hidden]) ~ :not([hidden]),
+html.bcm-light [class*="divide-zinc-800\\/"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--bcm-border) !important;
+}
+html.bcm-light .divide-zinc-900 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--bcm-divider) !important;
+}
+
+/* --- Card shadow on white surfaces in main content --- */
+html.bcm-light main.bcm-content .bg-zinc-900,
+html.bcm-light main.bcm-content [class*="bg-zinc-900\\/"] {
+  box-shadow: var(--bcm-card-shadow);
+}
+
+/* --- Table headers --- */
+html.bcm-light table thead tr {
+  background-color: #f0ede8;
+}
+html.bcm-light table thead .text-zinc-500 {
+  color: var(--bcm-heading) !important;
+}
+
+/* --- Inputs/selects/textareas in light mode --- */
+html.bcm-light input,
+html.bcm-light textarea,
+html.bcm-light select {
+  color: var(--bcm-text);
+  color-scheme: light;
+}
+html.bcm-light input::placeholder,
+html.bcm-light textarea::placeholder {
+  color: #9a9a9a;
+}
+html.bcm-light input:focus,
+html.bcm-light textarea:focus,
+html.bcm-light select:focus {
+  border-color: var(--bcm-accent) !important;
+  box-shadow: 0 0 0 1px var(--bcm-accent) !important;
+}
+
+/* --- Sidebar: ALWAYS dark navy in light mode --- */
+html.bcm-light .bcm-sidebar {
+  background-color: var(--bcm-sidebar) !important;
+  border-right-color: rgba(255, 255, 255, 0.06) !important;
+}
+html.bcm-light .bcm-sidebar .text-zinc-400,
+html.bcm-light .bcm-sidebar .text-zinc-500,
+html.bcm-light .bcm-sidebar button {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+html.bcm-light .bcm-sidebar button:hover {
+  background-color: var(--bcm-sidebar-active) !important;
+  color: #ffffff !important;
+}
+html.bcm-light .bcm-sidebar .bg-blue-600\/15 {
+  background-color: var(--bcm-sidebar-active) !important;
+  color: #ffffff !important;
+  box-shadow: inset 3px 0 0 var(--bcm-accent);
+}
+html.bcm-light .bcm-sidebar .text-blue-400 {
+  color: var(--bcm-accent) !important;
+}
+
+/* --- Top bar: ALWAYS dark navy in light mode --- */
+html.bcm-light .bcm-topbar {
+  background-color: var(--bcm-sidebar) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+}
+html.bcm-light .bcm-topbar .text-zinc-100,
+html.bcm-light .bcm-topbar .text-zinc-300 {
+  color: #ffffff !important;
+}
+html.bcm-light .bcm-topbar .text-zinc-400,
+html.bcm-light .bcm-topbar .text-zinc-500 {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+html.bcm-light .bcm-topbar button:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+html.bcm-light .bcm-topbar .bg-zinc-900 {
+  background-color: var(--bcm-sidebar-active) !important;
+  box-shadow: none !important;
+}
+
+/* --- Modal/lightbox backdrops stay dark (good contrast on either theme) --- */
+html.bcm-light .bg-black\/40,
+html.bcm-light .bg-black\/60,
+html.bcm-light .bg-black\/80,
+html.bcm-light .bg-black\/85 {
+  /* leave as-is; dark backdrops work in both themes */
+}
+
+/* --- Hover states on cards --- */
+html.bcm-light .hover\:bg-zinc-900:hover,
+html.bcm-light .hover\:bg-zinc-800:hover,
+html.bcm-light .hover\:bg-zinc-800\/60:hover {
+  background-color: #faf8f4 !important;
+}
+html.bcm-light .hover\:border-zinc-700:hover,
+html.bcm-light .hover\:border-zinc-600:hover {
+  border-color: var(--bcm-accent) !important;
+}
+html.bcm-light .hover\:text-blue-400:hover,
+html.bcm-light .hover\:text-zinc-200:hover {
+  color: var(--bcm-accent) !important;
+}
+
+/* --- Focus rings --- */
+html.bcm-light .focus\:border-blue-500:focus,
+html.bcm-light .focus\:ring-blue-500:focus {
+  border-color: var(--bcm-accent) !important;
+}
+html.bcm-light .border-blue-500\/40,
+html.bcm-light .border-blue-500\/30 {
+  border-color: var(--bcm-accent) !important;
+}
+
+/* --- Module cards (inside main content) get warm subtle border --- */
+html.bcm-light main.bcm-content [class*="border-dashed"] {
+  border-color: var(--bcm-border) !important;
 }

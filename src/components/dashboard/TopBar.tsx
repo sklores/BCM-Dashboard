@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronDown, MapPin, Settings } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, MapPin, Moon, Settings, Sun } from "lucide-react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 
 export type Project = {
@@ -25,10 +25,27 @@ export function TopBar({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [light, setLight] = useState(false);
   const active = projects.find((p) => p.id === activeProjectId) ?? projects[0];
 
+  useEffect(() => {
+    setLight(document.documentElement.classList.contains("bcm-light"));
+  }, []);
+
+  function toggleTheme() {
+    const next = !light;
+    setLight(next);
+    if (next) document.documentElement.classList.add("bcm-light");
+    else document.documentElement.classList.remove("bcm-light");
+    try {
+      localStorage.setItem("bcm-theme", next ? "light" : "dark");
+    } catch {
+      /* ignore */
+    }
+  }
+
   return (
-    <header className="flex h-14 shrink-0 items-center border-b border-zinc-800 bg-zinc-900 px-6">
+    <header className="bcm-topbar flex h-14 shrink-0 items-center border-b border-zinc-800 bg-zinc-900 px-6">
       {logoFailed ? (
         <div className="text-sm font-bold tracking-widest text-zinc-300">
           BCM
@@ -100,11 +117,20 @@ export function TopBar({
           </>
         )}
       </div>
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="ml-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200"
+        aria-label={light ? "Switch to dark mode" : "Switch to light mode"}
+        title={light ? "Switch to dark mode" : "Switch to light mode"}
+      >
+        {light ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+      </button>
       {onOpenSettings && (
         <button
           type="button"
           onClick={onOpenSettings}
-          className="ml-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200"
+          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200"
           aria-label="Settings"
           title="Settings"
         >

@@ -27,6 +27,14 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        {/* Apply theme before hydration to avoid a flash of the wrong mode. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try { if (localStorage.getItem('bcm-theme') === 'light') { document.documentElement.classList.add('bcm-light'); } } catch (e) {}`,
+          }}
+        />
+      </head>
       <body className="h-full overflow-hidden bg-zinc-950 text-zinc-100">
         {children}
       </body>

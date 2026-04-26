@@ -95,7 +95,7 @@ export function DashboardShell({ projects }: Props) {
               activeModule={activeModuleKey}
               onModuleChange={setActiveModuleKey}
             />
-            <main className="h-full flex-1 overflow-y-auto p-10">
+            <main className="bcm-content h-full flex-1 overflow-y-auto p-10">
               <ActiveModule
                 projectId={activeProjectId}
                 moduleKey={moduleDef.key}
