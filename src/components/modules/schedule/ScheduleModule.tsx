@@ -341,9 +341,7 @@ export function ScheduleModule({ projectId }: ModuleProps) {
               onReorderPhases={handleReorderPhases}
             />
           )}
-          {view === "milestone" && (
-            <MilestoneView phases={phases} milestones={milestones} />
-          )}
+          {view === "milestone" && <MilestoneView phases={phases} />}
         </>
       )}
     </div>

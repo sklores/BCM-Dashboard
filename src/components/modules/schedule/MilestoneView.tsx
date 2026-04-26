@@ -1,22 +1,12 @@
 "use client";
 
-import { Flag, Share2 } from "lucide-react";
+import { Share2 } from "lucide-react";
 import {
   STATUS_DOT,
   STATUS_LABEL,
   STATUS_TEXT,
   type SchedulePhase,
-  type ScheduleMilestone,
-  type ScheduleStatus,
 } from "./types";
-
-type DerivedMilestone = {
-  id: string;
-  name: string;
-  date: string | null;
-  status: ScheduleStatus;
-  source: "phase" | "milestone";
-};
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
@@ -28,38 +18,15 @@ function fmtDate(s: string | null): string {
   });
 }
 
-function compare(a: DerivedMilestone, b: DerivedMilestone): number {
-  const ad = a.date ?? "9999-12-31";
-  const bd = b.date ?? "9999-12-31";
-  return ad.localeCompare(bd);
-}
-
-export function MilestoneView({
-  phases,
-  milestones,
-}: {
-  phases: SchedulePhase[];
-  milestones: ScheduleMilestone[];
-}) {
-  const fromPhases: DerivedMilestone[] = phases
+export function MilestoneView({ phases }: { phases: SchedulePhase[] }) {
+  const all = phases
     .filter((p) => p.is_milestone)
-    .map((p) => ({
-      id: `phase-${p.id}`,
-      name: p.name,
-      date: p.end_date,
-      status: p.status,
-      source: "phase" as const,
-    }));
-
-  const fromMilestones: DerivedMilestone[] = milestones.map((m) => ({
-    id: `ms-${m.id}`,
-    name: m.name,
-    date: m.date,
-    status: m.status,
-    source: "milestone" as const,
-  }));
-
-  const all = [...fromPhases, ...fromMilestones].sort(compare);
+    .slice()
+    .sort((a, b) => {
+      const ad = a.end_date ?? "9999-12-31";
+      const bd = b.end_date ?? "9999-12-31";
+      return ad.localeCompare(bd);
+    });
 
   return (
     <div className="flex flex-col gap-6">
@@ -93,17 +60,9 @@ export function MilestoneView({
                 className={`absolute -left-[7px] top-1.5 h-3 w-3 rounded-full ring-4 ring-zinc-950 ${STATUS_DOT[m.status]}`}
               />
               <div className="flex flex-col gap-1">
-                <h3 className="flex items-center gap-2 text-base font-medium text-zinc-100">
-                  {m.name}
-                  {m.source === "phase" && (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-amber-300">
-                      <Flag className="h-2.5 w-2.5" />
-                      Phase
-                    </span>
-                  )}
-                </h3>
+                <h3 className="text-base font-medium text-zinc-100">{m.name}</h3>
                 <div className="flex items-center gap-3 text-xs">
-                  <span className="text-zinc-400">{fmtDate(m.date)}</span>
+                  <span className="text-zinc-400">{fmtDate(m.end_date)}</span>
                   <span className={STATUS_TEXT[m.status]}>
                     {STATUS_LABEL[m.status]}
                   </span>
