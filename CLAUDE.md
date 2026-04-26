@@ -19,7 +19,7 @@ Desktop only for now. Two persistent navigation surfaces:
 2. Estimating
 3. Paperwork
 4. Materials
-5. Subs
+5. Contractors
 6. Contacts
 7. Tasks
 8. Photos

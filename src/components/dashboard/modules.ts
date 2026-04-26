@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import {
   FileText,
   Package,
-  HardHat,
+  Truck,
   Users,
   ListChecks,
   Image as ImageIcon,
@@ -52,7 +52,7 @@ export const modules: ModuleDef[] = [
   { key: "estimating", label: "Estimating", icon: Calculator,    Component: EstimatingModule  },
   { key: "paperwork",  label: "Paperwork",  icon: FileSignature, Component: PaperworkModule   },
   { key: "materials",  label: "Materials",  icon: Package,       Component: MaterialsModule   },
-  { key: "subs",       label: "Subs",       icon: HardHat,       Component: SubsModule        },
+  { key: "subs",       label: "Contractors", icon: Truck,        Component: SubsModule        },
   { key: "contacts",   label: "Contacts",   icon: Users,         Component: ContactsModule    },
   { key: "tasks",      label: "Tasks",      icon: ListChecks,    Component: TasksModule       },
   { key: "photos",     label: "Photos",     icon: ImageIcon,     Component: PhotosModule      },
