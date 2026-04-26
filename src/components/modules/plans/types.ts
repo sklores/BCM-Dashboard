@@ -1,4 +1,67 @@
 export type DrawingStatus = "current" | "superseded";
+
+export type ExtractionCategory =
+  | "Architectural"
+  | "Structural"
+  | "Mechanical"
+  | "Electrical"
+  | "Plumbing"
+  | "Civil"
+  | "Specification"
+  | "Dimension"
+  | "Other";
+
+export const EXTRACTION_CATEGORIES: ExtractionCategory[] = [
+  "Architectural",
+  "Structural",
+  "Mechanical",
+  "Electrical",
+  "Plumbing",
+  "Civil",
+  "Specification",
+  "Dimension",
+  "Other",
+];
+
+export const EXTRACTION_CATEGORY_DOT: Record<ExtractionCategory, string> = {
+  Architectural: "bg-blue-400",
+  Structural: "bg-zinc-400",
+  Mechanical: "bg-orange-400",
+  Electrical: "bg-yellow-400",
+  Plumbing: "bg-cyan-400",
+  Civil: "bg-emerald-400",
+  Specification: "bg-violet-400",
+  Dimension: "bg-pink-400",
+  Other: "bg-zinc-500",
+};
+
+export type ExtractionStatus = "pending" | "confirmed" | "rejected";
+
+export type DrawingExtraction = {
+  id: string;
+  drawing_id: string;
+  category: ExtractionCategory | null;
+  label: string | null;
+  description: string | null;
+  location_description: string | null;
+  confidence: number | null;
+  status: ExtractionStatus;
+  pushed_to_materials: boolean;
+  pushed_to_schedule: boolean;
+  pushed_to_notes: boolean;
+  created_at: string;
+};
+
+export type TitleBlockResult = {
+  drawing_number: string | null;
+  title: string | null;
+  revision_number: string | null;
+  revision_date: string | null;
+  scale: string | null;
+  project_name: string | null;
+  sheet_size: string | null;
+  readable: boolean;
+};
 export type RfiStatus = "open" | "responded" | "closed";
 export type SubmittalStatus =
   | "pending"
@@ -42,6 +105,12 @@ export type Drawing = {
   status: DrawingStatus;
   superseded_by: string | null;
   created_at: string;
+  title_block_read: boolean;
+  extraction_status: "none" | "processing" | "complete" | "error";
+  extraction_completed_at: string | null;
+  scale: string | null;
+  sheet_size: string | null;
+  project_name: string | null;
 };
 
 export type DrawingPin = {

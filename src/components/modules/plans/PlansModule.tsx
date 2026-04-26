@@ -20,6 +20,7 @@ import { canEdit, useRole, type Role } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
   DRAWING_TYPE_LABEL,
+  EXTRACTION_CATEGORY_DOT,
   RFI_STATUSES,
   RFI_STATUS_LABEL,
   RFI_STATUS_TEXT,
@@ -45,6 +46,7 @@ import {
   deleteRfi,
   deleteSubmittal,
   fetchDrawings,
+  fetchExtractions,
   fetchPins,
   fetchRfis,
   fetchSubmittals,
@@ -54,8 +56,14 @@ import {
   postRfiToMessages,
   uploadDrawingPdf,
   postSubmittalAlert,
+  pushExtractionToMaterials,
+  pushExtractionToNotes,
+  pushExtractionToSchedule,
+  runExtractDrawing,
+  runTitleBlockRead,
   supersedeDrawing,
   updateDrawing,
+  updateExtraction,
   updateRfi,
   updateSubmittal,
   type DrawingPatch,
@@ -89,6 +97,7 @@ export function PlansModule({ projectId }: ModuleProps) {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState<Drawing | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -202,6 +211,15 @@ export function PlansModule({ projectId }: ModuleProps) {
               setDrawings((rows) =>
                 rows.map((d) => (d.id === id ? { ...d, pdf_url: url } : d)),
               );
+              // Auto-read the title block in the background.
+              runTitleBlockRead(id, url)
+                .then(async () => {
+                  const fresh = await fetchDrawings(projectId);
+                  setDrawings(fresh);
+                })
+                .catch(() => {
+                  /* non-fatal */
+                });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Upload failed");
             }
@@ -216,6 +234,7 @@ export function PlansModule({ projectId }: ModuleProps) {
               setError(err instanceof Error ? err.message : "Failed");
             }
           }}
+          onExtract={(d) => setExtracting(d)}
           onUploadNew={async (file) => {
             try {
               const titleGuess = file.name
@@ -230,6 +249,15 @@ export function PlansModule({ projectId }: ModuleProps) {
                 { ...created, pdf_url: url },
                 ...rows,
               ]);
+              // Auto-read the title block in the background.
+              runTitleBlockRead(created.id, url)
+                .then(async () => {
+                  const fresh = await fetchDrawings(projectId);
+                  setDrawings(fresh);
+                })
+                .catch(() => {
+                  /* non-fatal */
+                });
             } catch (err) {
               setError(err instanceof Error ? err.message : "Upload failed");
             }
@@ -383,6 +411,20 @@ export function PlansModule({ projectId }: ModuleProps) {
       {!loading && !error && section === "annotations" && (
         <AnnotationsSection pins={pins} drawings={drawings} users={users} />
       )}
+
+      {extracting && (
+        <ExtractionReviewPanel
+          projectId={projectId}
+          drawing={extracting}
+          editable={editable}
+          onClose={() => setExtracting(null)}
+          onDrawingUpdated={(d) =>
+            setDrawings((rows) =>
+              rows.map((x) => (x.id === d.id ? { ...x, ...d } : x)),
+            )
+          }
+        />
+      )}
     </div>
   );
 }
@@ -413,6 +455,7 @@ function DrawingsSection({
   onUploadPdf,
   onClearPdf,
   onUploadNew,
+  onExtract,
 }: {
   projectId: string;
   drawings: Drawing[];
@@ -425,6 +468,7 @@ function DrawingsSection({
   onUploadPdf: (id: string, file: File) => Promise<void>;
   onClearPdf: (id: string) => Promise<void>;
   onUploadNew: (file: File) => Promise<void>;
+  onExtract: (d: Drawing) => void;
 }) {
   void projectId;
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -685,8 +729,35 @@ function DrawingsSection({
                     onView={() => setViewing(d)}
                   />
                 </td>
-                <td className="w-32 px-2 py-2 text-right">
+                <td className="w-44 px-2 py-2 text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {d.title_block_read && (
+                      <span
+                        title="Title block auto-read by Claude Vision"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-1.5 py-0 text-[9px] uppercase tracking-wider text-violet-300"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        AI
+                      </span>
+                    )}
+                    {d.pdf_url && editable && (
+                      <button
+                        type="button"
+                        onClick={() => onExtract(d)}
+                        className="rounded-md border border-zinc-800 px-2 py-0.5 text-[11px] text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+                        title={
+                          d.extraction_status === "complete"
+                            ? "View extractions"
+                            : "Extract drawing data"
+                        }
+                      >
+                        {d.extraction_status === "complete"
+                          ? "View"
+                          : d.extraction_status === "processing"
+                            ? "Processing…"
+                            : "Extract"}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setShowHistoryFor(d.id)}
@@ -1734,5 +1805,446 @@ function PdfViewer({
         </div>
       </div>
     </div>
+  );
+}
+
+function ExtractionReviewPanel({
+  projectId,
+  drawing,
+  editable,
+  onClose,
+  onDrawingUpdated,
+}: {
+  projectId: string;
+  drawing: Drawing;
+  editable: boolean;
+  onClose: () => void;
+  onDrawingUpdated: (d: Drawing) => void;
+}) {
+  const [items, setItems] = useState<import("./types").DrawingExtraction[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchExtractions(drawing.id)
+      .then((rows) => {
+        if (!cancelled) setItems(rows);
+      })
+      .catch((e) => {
+        if (!cancelled)
+          setErr(e instanceof Error ? e.message : "Failed to load");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [drawing.id]);
+
+  async function handleRun() {
+    if (!drawing.pdf_url) return;
+    setRunning(true);
+    setErr(null);
+    try {
+      const inserted = await runExtractDrawing(drawing.id, drawing.pdf_url);
+      const all = await fetchExtractions(drawing.id);
+      setItems(all);
+      onDrawingUpdated({
+        ...drawing,
+        extraction_status: "complete",
+        extraction_completed_at: new Date().toISOString(),
+      });
+      // suppress unused param to match React-pattern friendliness
+      void inserted;
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Extraction failed");
+      onDrawingUpdated({ ...drawing, extraction_status: "error" });
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function patch(id: string, p: Parameters<typeof updateExtraction>[1]) {
+    setItems((rows) =>
+      rows.map((it) => (it.id === id ? { ...it, ...p } : it)),
+    );
+    try {
+      await updateExtraction(id, p);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed");
+    }
+  }
+
+  async function pushToMaterials(it: import("./types").DrawingExtraction) {
+    try {
+      await pushExtractionToMaterials(projectId, drawing, it);
+      setItems((rows) =>
+        rows.map((x) =>
+          x.id === it.id ? { ...x, pushed_to_materials: true } : x,
+        ),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Push failed");
+    }
+  }
+  async function pushToNotes(it: import("./types").DrawingExtraction) {
+    try {
+      await pushExtractionToNotes(projectId, drawing, it);
+      setItems((rows) =>
+        rows.map((x) =>
+          x.id === it.id ? { ...x, pushed_to_notes: true } : x,
+        ),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Push failed");
+    }
+  }
+  async function pushToSchedule(it: import("./types").DrawingExtraction) {
+    try {
+      await pushExtractionToSchedule(projectId, drawing, it);
+      setItems((rows) =>
+        rows.map((x) =>
+          x.id === it.id ? { ...x, pushed_to_schedule: true } : x,
+        ),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Push failed");
+    }
+  }
+
+  function toggle(cat: string) {
+    setCollapsed((s) => {
+      const next = new Set(s);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
+
+  const grouped = useMemo(() => {
+    const map = new Map<
+      string,
+      import("./types").DrawingExtraction[]
+    >();
+    for (const it of items) {
+      const c = it.category ?? "Other";
+      const arr = map.get(c) ?? [];
+      arr.push(it);
+      map.set(c, arr);
+    }
+    return Array.from(map.entries());
+  }, [items]);
+
+  const summary = useMemo(() => {
+    return {
+      total: items.length,
+      confirmed: items.filter((i) => i.status === "confirmed").length,
+      rejected: items.filter((i) => i.status === "rejected").length,
+      mat: items.filter((i) => i.pushed_to_materials).length,
+      sched: items.filter((i) => i.pushed_to_schedule).length,
+      notes: items.filter((i) => i.pushed_to_notes).length,
+    };
+  }, [items]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950">
+      <div className="flex shrink-0 items-center gap-3 border-b border-zinc-800 px-5 py-3">
+        <Map className="h-5 w-5 text-blue-400" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-zinc-100">
+            {drawing.title || "Untitled drawing"}
+          </div>
+          <div className="flex items-center gap-3 text-[11px] text-zinc-500">
+            {drawing.drawing_number && <span>{drawing.drawing_number}</span>}
+            {drawing.scale && <span>Scale {drawing.scale}</span>}
+            {drawing.title_block_read && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-1.5 text-[10px] uppercase tracking-wider text-violet-300">
+                <Sparkles className="h-3 w-3" />
+                AI title block
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+          <span>Total {summary.total}</span>
+          <span className="text-emerald-400">Confirmed {summary.confirmed}</span>
+          <span className="text-red-400">Rejected {summary.rejected}</span>
+          <span>→ Materials {summary.mat}</span>
+          <span>→ Notes {summary.notes}</span>
+          <span>→ Schedule {summary.sched}</span>
+        </div>
+        {editable && (
+          <button
+            type="button"
+            onClick={handleRun}
+            disabled={running || !drawing.pdf_url}
+            className="flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+          >
+            {running ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {items.length === 0
+              ? "Extract drawing data"
+              : running
+                ? "Analyzing…"
+                : "Re-extract"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+          aria-label="Close"
+          title="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex min-h-0 flex-1">
+        {/* PDF */}
+        <div className="min-h-0 flex-1 bg-zinc-900">
+          {drawing.pdf_url ? (
+            <iframe
+              src={`${drawing.pdf_url}#toolbar=1&navpanes=0`}
+              title={drawing.title || "Drawing"}
+              className="h-full w-full border-0 bg-white"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+              No PDF uploaded yet — upload one first to enable extraction.
+            </div>
+          )}
+        </div>
+
+        {/* Extractions sidebar */}
+        <aside className="flex w-[28rem] shrink-0 flex-col overflow-y-auto border-l border-zinc-800 bg-zinc-950">
+          {running && (
+            <div className="flex items-center gap-2 border-b border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-blue-300">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Analyzing drawing — this may take 30 seconds…
+            </div>
+          )}
+          {err && (
+            <div className="border-b border-zinc-800 bg-red-500/5 px-4 py-2 text-xs text-red-300">
+              {err}
+              {drawing.pdf_url && (
+                <button
+                  type="button"
+                  onClick={handleRun}
+                  className="ml-2 underline"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+          {loading && !running && (
+            <p className="px-4 py-3 text-xs text-zinc-500">Loading…</p>
+          )}
+          {!loading && !running && items.length === 0 && (
+            <div className="flex flex-col items-center gap-3 px-4 py-8 text-center">
+              <Sparkles className="h-6 w-6 text-blue-400" />
+              <p className="text-sm text-zinc-200">
+                No extractions yet for this drawing.
+              </p>
+              <p className="text-xs text-zinc-500">
+                Click <strong>Extract drawing data</strong> above to have
+                Claude read every labeled element on the sheet.
+              </p>
+            </div>
+          )}
+          {!loading && grouped.length > 0 && (
+            <div className="flex flex-col">
+              {grouped.map(([cat, list]) => {
+                const isCollapsed = collapsed.has(cat);
+                const dot =
+                  EXTRACTION_CATEGORY_DOT[
+                    cat as import("./types").ExtractionCategory
+                  ] ?? "bg-zinc-500";
+                return (
+                  <div
+                    key={cat}
+                    className="border-b border-zinc-800/60 last:border-b-0"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggle(cat)}
+                      className="flex w-full items-center gap-2 bg-zinc-900/40 px-3 py-2 text-left"
+                    >
+                      <span className={`h-2 w-2 rounded-full ${dot}`} />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-200">
+                        {cat}
+                      </span>
+                      <span className="ml-auto text-[10px] text-zinc-500">
+                        {list.length}
+                      </span>
+                    </button>
+                    {!isCollapsed && (
+                      <ul className="flex flex-col">
+                        {list.map((it) => (
+                          <ExtractionRow
+                            key={it.id}
+                            it={it}
+                            editable={editable}
+                            onPatch={patch}
+                            onPushToMaterials={pushToMaterials}
+                            onPushToNotes={pushToNotes}
+                            onPushToSchedule={pushToSchedule}
+                          />
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function ExtractionRow({
+  it,
+  editable,
+  onPatch,
+  onPushToMaterials,
+  onPushToNotes,
+  onPushToSchedule,
+}: {
+  it: import("./types").DrawingExtraction;
+  editable: boolean;
+  onPatch: (id: string, p: Parameters<typeof updateExtraction>[1]) => Promise<void>;
+  onPushToMaterials: (it: import("./types").DrawingExtraction) => Promise<void>;
+  onPushToNotes: (it: import("./types").DrawingExtraction) => Promise<void>;
+  onPushToSchedule: (it: import("./types").DrawingExtraction) => Promise<void>;
+}) {
+  const [labelDraft, setLabelDraft] = useState(it.label ?? "");
+  useEffect(() => setLabelDraft(it.label ?? ""), [it.label]);
+  const c = it.confidence ?? 0;
+  const conf = c >= 0.8 ? "bg-emerald-400" : c >= 0.5 ? "bg-yellow-400" : "bg-red-400";
+  const cat = it.category ?? "Other";
+
+  // Spec-driven push affordances per category.
+  const showMat = ["Architectural", "Structural", "Mechanical", "Electrical", "Plumbing"].includes(
+    cat,
+  );
+  const showSched = ["Mechanical", "Electrical"].includes(cat);
+  const showNotes = ["Specification", "Other"].includes(cat);
+
+  const dimmed = it.status === "rejected";
+  return (
+    <li
+      className={`border-b border-zinc-800/40 px-3 py-2.5 ${
+        dimmed ? "opacity-40" : ""
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${conf}`} title="Confidence" />
+        <div className="min-w-0 flex-1">
+          <input
+            type="text"
+            value={labelDraft}
+            disabled={!editable || it.status === "rejected"}
+            onChange={(e) => setLabelDraft(e.target.value)}
+            onBlur={() => {
+              if (labelDraft !== (it.label ?? ""))
+                onPatch(it.id, { label: labelDraft });
+            }}
+            className="w-full rounded bg-transparent px-1 py-0.5 text-sm font-medium text-zinc-100 outline-none focus:bg-zinc-900 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+          />
+          {it.description && (
+            <p className="mt-0.5 line-clamp-2 px-1 text-[11px] text-zinc-400">
+              {it.description}
+            </p>
+          )}
+          {it.location_description && (
+            <p className="mt-0.5 px-1 text-[10px] text-zinc-600">
+              📍 {it.location_description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {editable && (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {it.status === "pending" && (
+            <>
+              <button
+                type="button"
+                onClick={() => onPatch(it.id, { status: "confirmed" })}
+                className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-500/20"
+              >
+                Confirm
+              </button>
+              <button
+                type="button"
+                onClick={() => onPatch(it.id, { status: "rejected" })}
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-400 hover:border-red-500/40 hover:text-red-300"
+              >
+                Reject
+              </button>
+            </>
+          )}
+          {it.status === "confirmed" && (
+            <>
+              <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0 text-[10px] text-emerald-300">
+                Confirmed
+              </span>
+              {showMat && (
+                <button
+                  type="button"
+                  onClick={() => onPushToMaterials(it)}
+                  disabled={it.pushed_to_materials}
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+                >
+                  {it.pushed_to_materials ? "✓ Materials" : "→ Materials"}
+                </button>
+              )}
+              {showSched && (
+                <button
+                  type="button"
+                  onClick={() => onPushToSchedule(it)}
+                  disabled={it.pushed_to_schedule}
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+                >
+                  {it.pushed_to_schedule ? "✓ Schedule" : "→ Schedule"}
+                </button>
+              )}
+              {showNotes && (
+                <button
+                  type="button"
+                  onClick={() => onPushToNotes(it)}
+                  disabled={it.pushed_to_notes}
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+                >
+                  {it.pushed_to_notes ? "✓ Notes" : "→ Notes"}
+                </button>
+              )}
+            </>
+          )}
+          {it.status === "rejected" && (
+            <button
+              type="button"
+              onClick={() => onPatch(it.id, { status: "pending" })}
+              className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-400 hover:border-blue-500 hover:text-blue-400"
+            >
+              Restore
+            </button>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
