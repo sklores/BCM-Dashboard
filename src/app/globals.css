@@ -12,10 +12,12 @@
   --bcm-border: #e8e8e8;
   --bcm-divider: #e8e8e8;
   --bcm-heading: #1a1a1a;
-  --bcm-sidebar: #2c2c2c;
-  --bcm-sidebar-active: #1a1a1a;
+  --bcm-sidebar: #e5e5e5;
+  --bcm-sidebar-active: #d5d5d5;
+  --bcm-sidebar-hover: #dcdcdc;
   --bcm-accent: #c49a2a;
   --bcm-accent-hover: #a8821f;
+  --bcm-icon-green: #a6c84b;
 }
 
 @theme inline {
@@ -149,48 +151,53 @@ html.bcm-light select:focus {
   box-shadow: 0 0 0 1px var(--bcm-accent) !important;
 }
 
-/* --- Sidebar: ALWAYS dark navy in light mode --- */
+/* --- Sidebar: light grey surface in light mode (dark mode untouched) --- */
 html.bcm-light .bcm-sidebar {
   background-color: var(--bcm-sidebar) !important;
-  border-right-color: rgba(255, 255, 255, 0.06) !important;
+  border-right-color: var(--bcm-sidebar-active) !important;
 }
 html.bcm-light .bcm-sidebar .text-zinc-400,
 html.bcm-light .bcm-sidebar .text-zinc-500,
 html.bcm-light .bcm-sidebar button {
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: var(--bcm-text) !important;
 }
 html.bcm-light .bcm-sidebar button:hover {
-  background-color: var(--bcm-sidebar-active) !important;
-  color: #ffffff !important;
+  background-color: var(--bcm-sidebar-hover) !important;
+  color: var(--bcm-text) !important;
 }
 html.bcm-light .bcm-sidebar .bg-blue-600\/15 {
   background-color: var(--bcm-sidebar-active) !important;
-  color: #ffffff !important;
   box-shadow: inset 3px 0 0 var(--bcm-accent);
 }
+/* Active tab text + icon: green (replaces blue) */
 html.bcm-light .bcm-sidebar .text-blue-400 {
-  color: var(--bcm-accent) !important;
+  color: var(--bcm-icon-green) !important;
 }
 
-/* --- Top bar: ALWAYS dark navy in light mode --- */
+/* --- Top bar: light grey surface in light mode --- */
 html.bcm-light .bcm-topbar {
   background-color: var(--bcm-sidebar) !important;
-  border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+  border-bottom-color: var(--bcm-sidebar-active) !important;
 }
 html.bcm-light .bcm-topbar .text-zinc-100,
 html.bcm-light .bcm-topbar .text-zinc-300 {
-  color: #ffffff !important;
+  color: var(--bcm-text) !important;
 }
 html.bcm-light .bcm-topbar .text-zinc-400,
 html.bcm-light .bcm-topbar .text-zinc-500 {
-  color: rgba(255, 255, 255, 0.65) !important;
+  color: var(--bcm-text-muted) !important;
 }
 html.bcm-light .bcm-topbar button:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: rgba(0, 0, 0, 0.06) !important;
 }
 html.bcm-light .bcm-topbar .bg-zinc-900 {
-  background-color: var(--bcm-sidebar-active) !important;
+  background-color: #ffffff !important;
   box-shadow: none !important;
+}
+
+/* --- Global: replace blue-400 (module header icons + accent) with green --- */
+html.bcm-light .text-blue-400 {
+  color: var(--bcm-icon-green) !important;
 }
 
 /* --- Modal/lightbox backdrops stay dark (good contrast on either theme) --- */
