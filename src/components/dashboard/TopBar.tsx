@@ -459,7 +459,7 @@ async function runSearch(
   const PER = 5;
   const out: SearchResult[] = [];
 
-  async function safe<T>(p: Promise<T>): Promise<T | null> {
+  async function safe<T>(p: PromiseLike<T>): Promise<T | null> {
     try {
       return await p;
     } catch {
