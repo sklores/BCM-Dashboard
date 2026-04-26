@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Image as ImageIcon, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Image as ImageIcon, Search } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import { Uploader } from "./Uploader";
@@ -33,6 +33,7 @@ export function PhotosModule({ projectId }: ModuleProps) {
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Photo | null>(null);
   const [annotating, setAnnotating] = useState<Photo | null>(null);
+  const [tagsOpen, setTagsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,32 +174,67 @@ export function PhotosModule({ projectId }: ModuleProps) {
           </div>
 
           {allTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {allTags.map((tag) => {
-                const active = activeTags.has(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleTag(tag)}
-                    className={`rounded-full border px-2.5 py-0.5 text-xs transition ${
-                      active
-                        ? "border-blue-500/40 bg-blue-600/15 text-blue-300"
-                        : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-              {activeTags.size > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setActiveTags(new Set())}
-                  className="text-xs text-zinc-500 hover:text-zinc-200"
+                  onClick={() => setTagsOpen((v) => !v)}
+                  className="flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
                 >
-                  Clear
+                  {tagsOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  )}
+                  Filter by tag
+                  <span className="text-zinc-500">({allTags.length})</span>
                 </button>
+                {activeTags.size > 0 && (
+                  <>
+                    <div className="flex flex-wrap gap-1">
+                      {Array.from(activeTags).map((tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => toggleTag(tag)}
+                          className="flex items-center gap-1 rounded-full border border-blue-500/40 bg-blue-600/15 px-2 py-0.5 text-xs text-blue-300 hover:brightness-110"
+                          title="Remove filter"
+                        >
+                          {tag}
+                          <span aria-hidden>×</span>
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTags(new Set())}
+                      className="text-xs text-zinc-500 hover:text-zinc-200"
+                    >
+                      Clear
+                    </button>
+                  </>
+                )}
+              </div>
+              {tagsOpen && (
+                <div className="flex flex-wrap gap-1.5">
+                  {allTags.map((tag) => {
+                    const active = activeTags.has(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleTag(tag)}
+                        className={`rounded-full border px-2.5 py-0.5 text-xs transition ${
+                          active
+                            ? "border-blue-500/40 bg-blue-600/15 text-blue-300"
+                            : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200"
+                        }`}
+                      >
+                        {tag}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}
