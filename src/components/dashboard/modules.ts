@@ -25,6 +25,7 @@ import { PermitsModule } from "@/components/modules/permits/PermitsModule";
 import { NotesModule } from "@/components/modules/notes/NotesModule";
 import { ReportsModule } from "@/components/modules/reports/ReportsModule";
 import { BudgetModule } from "@/components/modules/budget/BudgetModule";
+import { CalendarModule } from "@/components/modules/calendar/CalendarModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
@@ -62,7 +63,7 @@ export const modules: ModuleDef[] = [
   { key: "plans",      label: "Plans",      icon: Map,           Component: PlansModule       },
   { key: "permits",    label: "Permits",    icon: ScrollText,    Component: PermitsModule     },
   { key: "notes",      label: "Notes",      icon: StickyNote,    Component: NotesModule       },
-  { key: "calendar",   label: "Calendar",   icon: CalendarDays,  Component: PlaceholderModule },
+  { key: "calendar",   label: "Calendar",   icon: CalendarDays,  Component: CalendarModule    },
   { key: "messages",   label: "Messages",   icon: Inbox,         Component: MessagesModule    },
   { key: "billing",    label: "Billing",    icon: DollarSign,    Component: BillingModule     },
 ];
