@@ -326,20 +326,30 @@ export async function postSubmittalAlert(
   if (error) throw error;
 }
 
-// ---------- Users ----------
+// ---------- People (Contacts) ----------
+// Plans person-pickers (Uploaded by, Assigned to, Submitted by, etc.) pull
+// from the project Contacts directory. Project-scoped so the dropdown
+// only shows people associated with the current project.
 
-export async function fetchUserOptions(): Promise<UserOption[]> {
+export async function fetchUserOptions(
+  projectId: string,
+): Promise<UserOption[]> {
   const { data, error } = await supabase
-    .from("users")
-    .select("id, full_name, email")
-    .order("full_name", { ascending: true, nullsFirst: false });
+    .from("contacts")
+    .select("id, first_name, last_name, email")
+    .eq("project_id", projectId);
   if (error) throw error;
-  return (data ?? []).map((u) => ({
-    id: u.id as string,
-    name:
-      (u.full_name as string | null) ||
-      (u.email as string | null) ||
-      "Unnamed",
-  }));
+  return (data ?? [])
+    .map((c) => ({
+      id: c.id as string,
+      name:
+        (
+          `${(c.first_name as string | null) ?? ""} ${(c.last_name as string | null) ?? ""}`
+            .trim()
+        ) ||
+        (c.email as string | null) ||
+        "Unnamed",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 

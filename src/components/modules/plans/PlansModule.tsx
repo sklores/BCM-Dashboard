@@ -101,7 +101,7 @@ export function PlansModule({ projectId }: ModuleProps) {
           fetchRfis(projectId),
           fetchSubmittals(projectId),
           fetchPins(projectId),
-          fetchUserOptions(),
+          fetchUserOptions(projectId),
         ]);
         if (cancelled) return;
         setDrawings(d);
