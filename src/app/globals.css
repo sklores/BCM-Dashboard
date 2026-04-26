@@ -5,18 +5,17 @@
   --foreground: #171717;
 
   /* BCM Light theme tokens */
-  --bcm-bg: #f8f6f2;
+  --bcm-bg: #ffffff;
   --bcm-card: #ffffff;
   --bcm-text: #1a1a1a;
   --bcm-text-muted: #6b6b6b;
-  --bcm-border: #e2ddd6;
-  --bcm-divider: #edebe7;
-  --bcm-heading: #1c2b4a;
-  --bcm-sidebar: #1c2b4a;
-  --bcm-sidebar-active: #162338;
+  --bcm-border: #e8e8e8;
+  --bcm-divider: #e8e8e8;
+  --bcm-heading: #1a1a1a;
+  --bcm-sidebar: #2c2c2c;
+  --bcm-sidebar-active: #1a1a1a;
   --bcm-accent: #c49a2a;
   --bcm-accent-hover: #a8821f;
-  --bcm-card-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
 @theme inline {
@@ -99,18 +98,29 @@ html.bcm-light .divide-zinc-900 > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--bcm-divider) !important;
 }
 
-/* --- Card shadow on white surfaces in main content --- */
+/* --- Cards: clean 1px border, no shadow, no warm tint --- */
 html.bcm-light main.bcm-content .bg-zinc-900,
-html.bcm-light main.bcm-content [class*="bg-zinc-900\\/"] {
-  box-shadow: var(--bcm-card-shadow);
+html.bcm-light main.bcm-content [class*="bg-zinc-900\\/"],
+html.bcm-light main.bcm-content .bg-zinc-800,
+html.bcm-light main.bcm-content [class*="bg-zinc-800\\/"] {
+  background-color: #ffffff !important;
+  box-shadow: none !important;
+}
+html.bcm-light main.bcm-content [class*="rounded-md"],
+html.bcm-light main.bcm-content [class*="rounded-lg"] {
+  border-color: var(--bcm-border) !important;
 }
 
-/* --- Table headers --- */
+/* --- Table headers: minimal, no fill, just an underline --- */
 html.bcm-light table thead tr {
-  background-color: #f0ede8;
+  background-color: transparent !important;
+  border-bottom: 1px solid var(--bcm-border);
 }
 html.bcm-light table thead .text-zinc-500 {
-  color: var(--bcm-heading) !important;
+  color: var(--bcm-text-muted) !important;
+}
+html.bcm-light table tbody tr {
+  border-bottom: 1px solid var(--bcm-border);
 }
 
 /* --- Inputs/selects/textareas in light mode --- */
@@ -183,18 +193,20 @@ html.bcm-light .bg-black\/85 {
   /* leave as-is; dark backdrops work in both themes */
 }
 
-/* --- Hover states on cards --- */
+/* --- Hover states: keep surfaces white, lift via accent border/text --- */
 html.bcm-light .hover\:bg-zinc-900:hover,
+html.bcm-light .hover\:bg-zinc-900\/40:hover,
 html.bcm-light .hover\:bg-zinc-800:hover,
 html.bcm-light .hover\:bg-zinc-800\/60:hover {
-  background-color: #faf8f4 !important;
+  background-color: #ffffff !important;
 }
 html.bcm-light .hover\:border-zinc-700:hover,
 html.bcm-light .hover\:border-zinc-600:hover {
   border-color: var(--bcm-accent) !important;
 }
 html.bcm-light .hover\:text-blue-400:hover,
-html.bcm-light .hover\:text-zinc-200:hover {
+html.bcm-light .hover\:text-zinc-200:hover,
+html.bcm-light .hover\:text-zinc-100:hover {
   color: var(--bcm-accent) !important;
 }
 
