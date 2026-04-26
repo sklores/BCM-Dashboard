@@ -30,6 +30,7 @@ import { EstimatingModule } from "@/components/modules/estimating/EstimatingModu
 import { PlansModule } from "@/components/modules/plans/PlansModule";
 import { ClientModule } from "@/components/modules/client/ClientModule";
 import { BillingModule } from "@/components/modules/billing/BillingModule";
+import { PaperworkModule } from "@/components/modules/paperwork/PaperworkModule";
 import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
 
 export type ModuleProps = {
@@ -48,7 +49,7 @@ export type ModuleDef = {
 export const modules: ModuleDef[] = [
   { key: "reports",    label: "Reports",    icon: FileText,      Component: PlaceholderModule },
   { key: "estimating", label: "Estimating", icon: Calculator,    Component: EstimatingModule  },
-  { key: "paperwork",  label: "Paperwork",  icon: FileSignature, Component: PlaceholderModule },
+  { key: "paperwork",  label: "Paperwork",  icon: FileSignature, Component: PaperworkModule   },
   { key: "materials",  label: "Materials",  icon: Package,       Component: MaterialsModule   },
   { key: "subs",       label: "Subs",       icon: HardHat,       Component: SubsModule        },
   { key: "team",       label: "Team",       icon: Users,         Component: TeamModule        },
