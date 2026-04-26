@@ -65,41 +65,11 @@ export async function POST(req: Request) {
 
   const userContent: Anthropic.Messages.ContentBlockParam[] = [];
   if (isUrl) {
-    // Fetch on the server with a realistic browser User-Agent. Most
-    // bot-blocked sites pass with a UA + Accept header. We then send the
-    // page body to Claude as text (no server tools needed).
-    let html: string;
-    try {
-      const upstream = await fetch(body.url!, {
-        redirect: "follow",
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-          Accept:
-            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-      });
-      if (!upstream.ok) {
-        return NextResponse.json(
-          {
-            error: `URL fetch failed: ${upstream.status} ${upstream.statusText}. The site may block automated fetches — try uploading the spec sheet PDF instead.`,
-          },
-          { status: 502 },
-        );
-      }
-      html = await upstream.text();
-    } catch (err) {
-      return NextResponse.json(
-        {
-          error:
-            "Couldn't reach that URL: " +
-            (err instanceof Error ? err.message : String(err)),
-        },
-        { status: 502 },
-      );
+    const result = await fetchProductPage(body.url!);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 502 });
     }
-
+    let html = result.html;
     // Cap to keep prompt size reasonable. Truncate from the middle if huge.
     const MAX = 180_000;
     if (html.length > MAX) {
@@ -111,7 +81,9 @@ export async function POST(req: Request) {
 
     userContent.push({
       type: "text",
-      text: `${PROMPT_BASE}\n\nThe HTML below is the product page at ${body.url}. Extract the product details.\n\nHTML:\n\n${html}`,
+      text: `${PROMPT_BASE}\n\nThe HTML below is the product page at ${body.url}${
+        result.via === "wayback" ? " (via Wayback Machine snapshot)" : ""
+      }. Extract the product details.\n\nHTML:\n\n${html}`,
     });
   } else if (body.fileBase64 && body.mimeType) {
     if (body.mimeType === "application/pdf") {
@@ -215,4 +187,76 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+}
+
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+
+async function directFetch(url: string): Promise<Response> {
+  return fetch(url, {
+    redirect: "follow",
+    headers: {
+      "User-Agent": BROWSER_UA,
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+  });
+}
+
+async function fetchProductPage(
+  url: string,
+): Promise<
+  | { ok: true; html: string; via: "direct" | "wayback" }
+  | { ok: false; error: string }
+> {
+  // 1. Try a direct fetch with a browser User-Agent.
+  let directStatus: number | null = null;
+  let directError: string | null = null;
+  try {
+    const r = await directFetch(url);
+    if (r.ok) {
+      const html = await r.text();
+      return { ok: true, html, via: "direct" };
+    }
+    directStatus = r.status;
+  } catch (err) {
+    directError = err instanceof Error ? err.message : String(err);
+  }
+
+  // 2. Fall back to the Wayback Machine's most recent snapshot.
+  try {
+    const lookup = await fetch(
+      `https://archive.org/wayback/available?url=${encodeURIComponent(url)}`,
+      { headers: { "User-Agent": BROWSER_UA } },
+    );
+    if (lookup.ok) {
+      const j = (await lookup.json()) as {
+        archived_snapshots?: { closest?: { available?: boolean; url?: string } };
+      };
+      const snap = j.archived_snapshots?.closest;
+      if (snap?.available && snap.url) {
+        const snapRes = await fetch(snap.url, {
+          headers: { "User-Agent": BROWSER_UA },
+          redirect: "follow",
+        });
+        if (snapRes.ok) {
+          const html = await snapRes.text();
+          return { ok: true, html, via: "wayback" };
+        }
+      }
+    }
+  } catch {
+    /* fall through to error */
+  }
+
+  const directLine = directStatus
+    ? `Direct fetch returned ${directStatus}.`
+    : directError
+      ? `Direct fetch errored: ${directError}.`
+      : "Direct fetch failed.";
+  return {
+    ok: false,
+    error: `${directLine} No Wayback Machine snapshot available either. Try uploading the spec sheet PDF instead.`,
+  };
 }
