@@ -18,19 +18,22 @@ import {
   createContact,
   deleteCompany,
   deleteContact,
+  ensureCompanyCategories,
   fetchActivityForContact,
-  fetchCompanies,
   fetchContacts,
   updateCompany,
   updateContact,
   type ActivityRow,
 } from "./queries";
 import {
+  COMPANY_CATEGORIES,
+  COMPANY_CATEGORY_LABEL,
   ROLE_TYPES,
   ROLE_TYPE_LABEL,
   ROLE_TYPE_STYLE,
   contactDisplayName,
   type Company,
+  type CompanyCategory,
   type CompanyPatch,
   type Contact,
   type ContactPatch,
@@ -41,8 +44,6 @@ type Selection =
   | { kind: "contact"; id: string }
   | { kind: "company"; id: string }
   | null;
-
-const NO_COMPANY = "__no_company__";
 
 export function ContactsModule({ projectId }: ModuleProps) {
   const role = useRole();
@@ -65,7 +66,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
     (async () => {
       try {
         const [cos, cts] = await Promise.all([
-          fetchCompanies(projectId),
+          ensureCompanyCategories(projectId),
           fetchContacts(projectId),
         ]);
         if (cancelled) return;
@@ -104,29 +105,66 @@ export function ContactsModule({ projectId }: ModuleProps) {
     });
   }, [contacts, companies, search, roleFilter]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, Contact[]>();
+  const groupedByCategory = useMemo(() => {
+    // Build companies-with-contacts for each of the seven canonical categories,
+    // plus an "Uncategorized" bucket for any legacy company without a category.
+    const contactsByCompany = new Map<string, Contact[]>();
+    const orphans: Contact[] = [];
     for (const c of filteredContacts) {
-      const key = c.company_id ?? NO_COMPANY;
-      const list = map.get(key) ?? [];
-      list.push(c);
-      map.set(key, list);
+      if (c.company_id) {
+        const list = contactsByCompany.get(c.company_id) ?? [];
+        list.push(c);
+        contactsByCompany.set(c.company_id, list);
+      } else {
+        orphans.push(c);
+      }
     }
-    const ordered: Array<{ company: Company | null; rows: Contact[] }> = [];
-    for (const co of companies) {
-      const rows = map.get(co.id);
-      if (rows && rows.length > 0) ordered.push({ company: co, rows });
+    const sections: Array<{
+      key: string;
+      label: string;
+      category: CompanyCategory | null;
+      companies: Array<{ company: Company; rows: Contact[] }>;
+    }> = COMPANY_CATEGORIES.map((cat) => ({
+      key: cat,
+      label: COMPANY_CATEGORY_LABEL[cat],
+      category: cat,
+      companies: companies
+        .filter((c) => c.category === cat)
+        .map((co) => ({
+          company: co,
+          rows: contactsByCompany.get(co.id) ?? [],
+        })),
+    }));
+    const uncategorizedCompanies = companies
+      .filter((c) => !c.category)
+      .map((co) => ({
+        company: co,
+        rows: contactsByCompany.get(co.id) ?? [],
+      }));
+    if (uncategorizedCompanies.length > 0 || orphans.length > 0) {
+      sections.push({
+        key: "__uncategorized__",
+        label: "Uncategorized",
+        category: null,
+        companies: uncategorizedCompanies,
+      });
     }
-    const orphan = map.get(NO_COMPANY);
-    if (orphan && orphan.length > 0) ordered.push({ company: null, rows: orphan });
-    return ordered;
+    return { sections, orphans };
   }, [filteredContacts, companies]);
 
-  async function handleAddCompany() {
-    const name = window.prompt("Company name?");
-    if (!name) return;
+  async function handleAddCompany(category: CompanyCategory | null = null) {
+    const name = window.prompt(
+      category
+        ? `New company under ${COMPANY_CATEGORY_LABEL[category]}?`
+        : "Company name?",
+    );
+    if (name === null) return;
     try {
-      const created = await createCompany(projectId, name.trim());
+      const created = await createCompany(
+        projectId,
+        name.trim(),
+        category,
+      );
       setCompanies((rows) =>
         [...rows, created].sort((a, b) =>
           a.company_name.localeCompare(b.company_name),
@@ -266,7 +304,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
               </button>
               <button
                 type="button"
-                onClick={handleAddCompany}
+                onClick={() => handleAddCompany(null)}
                 className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -283,44 +321,113 @@ export function ContactsModule({ projectId }: ModuleProps) {
       {!loading && !error && (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           {/* List pane */}
-          <div className="flex flex-col gap-3">
-            {grouped.length === 0 && (
-              <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 p-6 text-center text-sm text-zinc-500">
-                No contacts yet. Add a contact or company to get started.
+          <div className="flex flex-col gap-4">
+            {groupedByCategory.sections.map((section) => (
+              <div key={section.key} className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    {section.label}
+                  </span>
+                  <span className="text-[10px] text-zinc-600">
+                    {section.companies.length}{" "}
+                    {section.companies.length === 1 ? "company" : "companies"}
+                  </span>
+                  {canCreate && section.category && (
+                    <button
+                      type="button"
+                      onClick={() => handleAddCompany(section.category)}
+                      className="ml-auto rounded p-0.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                      title={`Add company under ${section.label}`}
+                      aria-label={`Add company under ${section.label}`}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                {section.companies.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/30 p-3 text-xs text-zinc-500">
+                    Empty — click + to add the {section.label.toLowerCase()} company.
+                  </div>
+                ) : (
+                  section.companies.map(({ company, rows }) => (
+                    <div
+                      key={company.id}
+                      className="rounded-md border border-zinc-800 bg-zinc-900/40"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelection({ kind: "company", id: company.id })
+                        }
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-zinc-900 ${
+                          selectedCompany?.id === company.id
+                            ? "bg-zinc-900"
+                            : ""
+                        }`}
+                      >
+                        <Building2 className="h-4 w-4 text-zinc-500" />
+                        <span className="text-sm font-medium text-zinc-200">
+                          {company.company_name?.trim() || (
+                            <span className="italic text-zinc-500">
+                              Click to fill in name…
+                            </span>
+                          )}
+                        </span>
+                        <span className="ml-auto text-xs text-zinc-500">
+                          {rows.length}
+                        </span>
+                      </button>
+                      {rows.length > 0 && (
+                        <ul className="divide-y divide-zinc-800/60 border-t border-zinc-800/60">
+                          {rows.map((c) => {
+                            const active =
+                              selectedContact?.id === c.id &&
+                              selection?.kind === "contact";
+                            return (
+                              <li key={c.id}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setSelection({ kind: "contact", id: c.id })
+                                  }
+                                  className={`flex w-full items-center gap-3 px-3 py-2 text-left transition ${
+                                    active
+                                      ? "bg-blue-600/10 text-blue-300"
+                                      : "text-zinc-300 hover:bg-zinc-900"
+                                  }`}
+                                >
+                                  <UserCircle2 className="h-4 w-4 shrink-0 text-zinc-500" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm">
+                                      {contactDisplayName(c)}
+                                    </div>
+                                    {c.email && (
+                                      <div className="truncate text-[11px] text-zinc-500">
+                                        {c.email}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {c.role_type && (
+                                    <RoleBadge role={c.role_type as RoleType} />
+                                  )}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
-            )}
-            {grouped.map(({ company, rows }) => (
-              <div
-                key={company?.id ?? NO_COMPANY}
-                className="rounded-md border border-zinc-800 bg-zinc-900/40"
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    company
-                      ? setSelection({ kind: "company", id: company.id })
-                      : null
-                  }
-                  className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
-                    company
-                      ? "transition hover:bg-zinc-900"
-                      : "cursor-default"
-                  } ${
-                    selectedCompany?.id === company?.id
-                      ? "bg-zinc-900"
-                      : ""
-                  }`}
-                >
-                  <Building2 className="h-4 w-4 text-zinc-500" />
-                  <span className="text-sm font-medium text-zinc-200">
-                    {company?.company_name ?? "Unaffiliated"}
-                  </span>
-                  <span className="ml-auto text-xs text-zinc-500">
-                    {rows.length}
-                  </span>
-                </button>
-                <ul className="divide-y divide-zinc-800/60 border-t border-zinc-800/60">
-                  {rows.map((c) => {
+            ))}
+            {groupedByCategory.orphans.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                  Unaffiliated contacts
+                </div>
+                <ul className="divide-y divide-zinc-800/60 rounded-md border border-zinc-800 bg-zinc-900/40">
+                  {groupedByCategory.orphans.map((c) => {
                     const active =
                       selectedContact?.id === c.id &&
                       selection?.kind === "contact";
@@ -357,7 +464,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
                   })}
                 </ul>
               </div>
-            ))}
+            )}
           </div>
 
           {/* Detail pane */}
@@ -723,6 +830,25 @@ function CompanyDetail({
             {contacts.map((c) => (
               <option key={c.id} value={c.id}>
                 {contactDisplayName(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Category" wide>
+          <select
+            value={company.category ?? ""}
+            disabled={!editable}
+            onChange={(e) =>
+              onUpdate(company.id, {
+                category: (e.target.value || null) as CompanyCategory | null,
+              })
+            }
+            className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+          >
+            <option value="">— Uncategorized —</option>
+            {COMPANY_CATEGORIES.map((cat) => (
+              <option key={cat} value={cat}>
+                {COMPANY_CATEGORY_LABEL[cat]}
               </option>
             ))}
           </select>

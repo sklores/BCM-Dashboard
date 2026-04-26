@@ -1,13 +1,15 @@
 import { supabase } from "@/lib/supabase";
-import type {
-  Company,
-  CompanyPatch,
-  Contact,
-  ContactPatch,
+import {
+  COMPANY_CATEGORIES,
+  type Company,
+  type CompanyCategory,
+  type CompanyPatch,
+  type Contact,
+  type ContactPatch,
 } from "./types";
 
 const COMPANY_COLUMNS =
-  "id, project_id, company_name, address, website, phone, primary_contact_id, created_at";
+  "id, project_id, company_name, address, website, phone, primary_contact_id, category, created_at";
 
 const CONTACT_COLUMNS =
   "id, project_id, first_name, last_name, company_id, role_type, email, phone, address, notes, created_at";
@@ -24,13 +26,39 @@ export async function fetchCompanies(projectId: string): Promise<Company[]> {
   return (data ?? []) as Company[];
 }
 
+// Ensure every project has at least one placeholder row in each of the seven
+// category buckets. Idempotent: only inserts rows for categories that have
+// zero companies.
+export async function ensureCompanyCategories(
+  projectId: string,
+): Promise<Company[]> {
+  const existing = await fetchCompanies(projectId);
+  const present = new Set(
+    existing.map((c) => c.category).filter(Boolean) as CompanyCategory[],
+  );
+  const missing = COMPANY_CATEGORIES.filter((cat) => !present.has(cat));
+  if (missing.length === 0) return existing;
+  const rows = missing.map((cat) => ({
+    project_id: projectId,
+    company_name: "",
+    category: cat,
+  }));
+  const { data, error } = await supabase
+    .from("companies")
+    .insert(rows)
+    .select(COMPANY_COLUMNS);
+  if (error) throw error;
+  return [...existing, ...((data ?? []) as Company[])];
+}
+
 export async function createCompany(
   projectId: string,
   name: string,
+  category: CompanyCategory | null = null,
 ): Promise<Company> {
   const { data, error } = await supabase
     .from("companies")
-    .insert({ project_id: projectId, company_name: name })
+    .insert({ project_id: projectId, company_name: name, category })
     .select(COMPANY_COLUMNS)
     .single();
   if (error) throw error;

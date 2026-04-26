@@ -57,6 +57,35 @@ export const ROLE_TYPE_STYLE: Record<RoleType, string> = {
   other: "bg-zinc-800 text-zinc-300 border-zinc-700",
 };
 
+export type CompanyCategory =
+  | "bcm_team"
+  | "contractors"
+  | "architect"
+  | "engineer"
+  | "meps"
+  | "client"
+  | "building";
+
+export const COMPANY_CATEGORIES: CompanyCategory[] = [
+  "bcm_team",
+  "contractors",
+  "architect",
+  "engineer",
+  "meps",
+  "client",
+  "building",
+];
+
+export const COMPANY_CATEGORY_LABEL: Record<CompanyCategory, string> = {
+  bcm_team: "Bruno Clay Team",
+  contractors: "Contractors",
+  architect: "Architect",
+  engineer: "Engineer",
+  meps: "MEPs",
+  client: "Client",
+  building: "Building",
+};
+
 export type Company = {
   id: string;
   project_id: string;
@@ -65,6 +94,7 @@ export type Company = {
   website: string | null;
   phone: string | null;
   primary_contact_id: string | null;
+  category: CompanyCategory | null;
   created_at: string;
 };
 
@@ -85,7 +115,12 @@ export type Contact = {
 export type CompanyPatch = Partial<
   Pick<
     Company,
-    "company_name" | "address" | "website" | "phone" | "primary_contact_id"
+    | "company_name"
+    | "address"
+    | "website"
+    | "phone"
+    | "primary_contact_id"
+    | "category"
   >
 >;
 

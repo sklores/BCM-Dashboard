@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  Camera,
   Loader2,
   MousePointer2,
   Pencil,
@@ -16,13 +17,14 @@ import {
 import { insertPhoto, uploadPhotoBlob } from "./queries";
 import type { Photo } from "./types";
 
-type Tool = "pen" | "text" | "arrow" | "rect";
+type Tool = "pen" | "text" | "arrow" | "rect" | "screenshot";
 
 const TOOL_LABEL: Record<Tool, string> = {
   pen: "Pen",
   text: "Text",
   arrow: "Arrow",
   rect: "Rectangle",
+  screenshot: "Screenshot",
 };
 
 const COLORS = [
@@ -76,6 +78,14 @@ export function PhotoAnnotator({
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Screenshot tool: rectangle being dragged in canvas coords.
+  const [cropRect, setCropRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const [savingScreenshot, setSavingScreenshot] = useState(false);
 
   // Load the image
   useEffect(() => {
@@ -115,7 +125,7 @@ export function PhotoAnnotator({
   useEffect(() => {
     redrawOverlay();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [strokes, drawing]);
+  }, [strokes, drawing, cropRect]);
 
   function redrawOverlay() {
     const canvas = overlayCanvasRef.current;
@@ -125,6 +135,32 @@ export function PhotoAnnotator({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     for (const s of strokes) drawStroke(ctx, s);
     if (drawing) drawStroke(ctx, drawing);
+    if (cropRect) drawCropRect(ctx, cropRect);
+  }
+
+  function drawCropRect(
+    ctx: CanvasRenderingContext2D,
+    rect: { x: number; y: number; w: number; h: number },
+  ) {
+    const x = Math.min(rect.x, rect.x + rect.w);
+    const y = Math.min(rect.y, rect.y + rect.h);
+    const w = Math.abs(rect.w);
+    const h = Math.abs(rect.h);
+    ctx.save();
+    // Dim everything outside the crop rect to spotlight the selection.
+    const cw = ctx.canvas.width;
+    const ch = ctx.canvas.height;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+    ctx.fillRect(0, 0, cw, y);
+    ctx.fillRect(0, y + h, cw, ch - (y + h));
+    ctx.fillRect(0, y, x, h);
+    ctx.fillRect(x + w, y, cw - (x + w), h);
+    // Dashed border on the rect itself.
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = Math.max(2, Math.round(cw / 600));
+    ctx.setLineDash([Math.max(8, cw / 200), Math.max(6, cw / 280)]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
   }
 
   function drawStroke(ctx: CanvasRenderingContext2D, s: Stroke) {
@@ -150,22 +186,31 @@ export function PhotoAnnotator({
     } else if (s.kind === "arrow") {
       const dx = s.x2 - s.x1;
       const dy = s.y2 - s.y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 1) return;
       const angle = Math.atan2(dy, dx);
-      const head = Math.max(12, s.size * 4);
+      // Arrowhead must be visibly larger than the line. Line width is size*3,
+      // so size*9 keeps the head ~3× line thickness at every size, with a
+      // generous floor so even the thinnest arrows have a clear pointer.
+      const head = Math.max(22, s.size * 9);
+      // Pull the line back so the line doesn't jut out the front of the head.
+      const inset = head * 0.85;
+      const baseX = s.x2 - inset * Math.cos(angle);
+      const baseY = s.y2 - inset * Math.sin(angle);
       ctx.beginPath();
       ctx.moveTo(s.x1, s.y1);
-      ctx.lineTo(s.x2, s.y2);
+      ctx.lineTo(baseX, baseY);
       ctx.stroke();
-      // Arrowhead (filled triangle)
+      // Arrowhead (filled triangle).
       ctx.beginPath();
       ctx.moveTo(s.x2, s.y2);
       ctx.lineTo(
-        s.x2 - head * Math.cos(angle - Math.PI / 6),
-        s.y2 - head * Math.sin(angle - Math.PI / 6),
+        s.x2 - head * Math.cos(angle - Math.PI / 7),
+        s.y2 - head * Math.sin(angle - Math.PI / 7),
       );
       ctx.lineTo(
-        s.x2 - head * Math.cos(angle + Math.PI / 6),
-        s.y2 - head * Math.sin(angle + Math.PI / 6),
+        s.x2 - head * Math.cos(angle + Math.PI / 7),
+        s.y2 - head * Math.sin(angle + Math.PI / 7),
       );
       ctx.closePath();
       ctx.fill();
@@ -269,6 +314,9 @@ export function PhotoAnnotator({
     } else if (tool === "text") {
       // Don't capture pointer — the text input needs to take focus.
       setTextPrompt({ x, y, value: "", fontPx: canvasFontPx() });
+    } else if (tool === "screenshot") {
+      setCropRect({ x, y, w: 0, h: 0 });
+      (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     }
   }
 
@@ -285,6 +333,10 @@ export function PhotoAnnotator({
       );
       return;
     }
+    if (cropRect && tool === "screenshot") {
+      setCropRect({ ...cropRect, w: x - cropRect.x, h: y - cropRect.y });
+      return;
+    }
     if (!drawing) return;
     if (drawing.kind === "pen") {
       setDrawing({ ...drawing, points: [...drawing.points, [x, y]] });
@@ -298,6 +350,15 @@ export function PhotoAnnotator({
   function onPointerUp() {
     if (textDrag) {
       setTextDrag(null);
+      return;
+    }
+    if (cropRect && tool === "screenshot") {
+      // Drop tiny / accidental rectangles.
+      const w = Math.abs(cropRect.w);
+      const h = Math.abs(cropRect.h);
+      if (w < 8 || h < 8) {
+        setCropRect(null);
+      }
       return;
     }
     if (!drawing) return;
@@ -336,6 +397,70 @@ export function PhotoAnnotator({
     if (strokes.length === 0) return;
     if (!window.confirm("Clear all annotations?")) return;
     setStrokes([]);
+  }
+
+  async function handleSaveScreenshot() {
+    if (!cropRect) return;
+    setSavingScreenshot(true);
+    setError(null);
+    try {
+      const base = baseCanvasRef.current;
+      if (!base) throw new Error("Canvas not ready");
+      // Normalize the rect so negative drags work, then clip to image bounds.
+      const x = Math.max(0, Math.round(Math.min(cropRect.x, cropRect.x + cropRect.w)));
+      const y = Math.max(0, Math.round(Math.min(cropRect.y, cropRect.y + cropRect.h)));
+      const w = Math.min(base.width - x, Math.round(Math.abs(cropRect.w)));
+      const h = Math.min(base.height - y, Math.round(Math.abs(cropRect.h)));
+      if (w < 4 || h < 4) throw new Error("Screenshot region is too small");
+      // Native-resolution crop: sample directly from the base canvas (which
+      // was drawn at the source image's natural size), so the new photo
+      // keeps the original pixels rather than a downscaled view.
+      const out = document.createElement("canvas");
+      out.width = w;
+      out.height = h;
+      const ctx = out.getContext("2d");
+      if (!ctx) throw new Error("Canvas context unavailable");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(base, x, y, w, h, 0, 0, w, h);
+
+      const blob: Blob = await new Promise((resolve, reject) =>
+        out.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
+          "image/png",
+        ),
+      );
+      const file = new File([blob], `screenshot-${Date.now()}.png`, {
+        type: "image/png",
+      });
+      const newId = crypto.randomUUID();
+      const { path, url } = await uploadPhotoBlob(photo.project_id, file, newId);
+      const tags = Array.from(
+        new Set([...(photo.tags ?? []), "screenshot"]),
+      );
+      const created = await insertPhoto({
+        id: newId,
+        project_id: photo.project_id,
+        storage_path: path,
+        storage_url: url,
+        taken_at: photo.taken_at,
+        tags,
+        room: photo.room,
+        stage: photo.stage,
+        ai_description: photo.ai_description,
+        annotated_from_id: photo.id,
+      });
+      onSaved(created);
+      setCropRect(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Screenshot failed");
+    } finally {
+      setSavingScreenshot(false);
+    }
+  }
+
+  function cancelScreenshot() {
+    setCropRect(null);
   }
 
   async function handleSave() {
@@ -395,6 +520,7 @@ export function PhotoAnnotator({
     text: Type,
     arrow: ArrowUpRight,
     rect: Square,
+    screenshot: Camera,
   };
 
   return (
@@ -556,6 +682,19 @@ export function PhotoAnnotator({
               onCancel={cancelText}
             />
           )}
+
+          {cropRect &&
+            tool === "screenshot" &&
+            Math.abs(cropRect.w) >= 8 &&
+            Math.abs(cropRect.h) >= 8 && (
+              <ScreenshotCommit
+                overlay={overlayCanvasRef}
+                rect={cropRect}
+                onSave={handleSaveScreenshot}
+                onCancel={cancelScreenshot}
+                saving={savingScreenshot}
+              />
+            )}
         </div>
 
         <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1 text-[11px] text-zinc-400">
@@ -566,7 +705,9 @@ export function PhotoAnnotator({
               ? "Click to place text"
               : tool === "arrow"
                 ? "Drag from base to tip"
-                : "Drag to draw a rectangle"}
+                : tool === "screenshot"
+                  ? "Drag to crop a region — saves as a new photo tagged screenshot"
+                  : "Drag to draw a rectangle"}
         </div>
       </div>
     </div>
@@ -654,6 +795,68 @@ function TextEntryOverlay({
         aria-label="Cancel"
       >
         <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function ScreenshotCommit({
+  overlay,
+  rect,
+  onSave,
+  onCancel,
+  saving,
+}: {
+  overlay: React.RefObject<HTMLCanvasElement | null>;
+  rect: { x: number; y: number; w: number; h: number };
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const c = overlay.current;
+  const dispRect = c?.getBoundingClientRect();
+  const scaleX = dispRect && c ? dispRect.width / c.width : 1;
+  const scaleY = dispRect && c ? dispRect.height / c.height : 1;
+  // Anchor the action panel just below the bottom-right of the crop rect, in
+  // display coords. Clamp into view so it stays clickable when crops are at
+  // the edge.
+  const x = Math.min(rect.x, rect.x + rect.w);
+  const y = Math.min(rect.y, rect.y + rect.h);
+  const w = Math.abs(rect.w);
+  const h = Math.abs(rect.h);
+  const left = (x + w) * scaleX;
+  const top = (y + h) * scaleY + 8;
+  return (
+    <div
+      className="absolute z-20 flex items-center gap-1 rounded-md border border-zinc-700 bg-zinc-900/95 px-2 py-1 shadow-lg"
+      style={{ left, top, transform: "translateX(-100%)" }}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <span className="text-[10px] text-zinc-500">
+        {Math.round(w)}×{Math.round(h)}
+      </span>
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={saving}
+        className="flex items-center gap-1 rounded-md border border-blue-500/40 bg-blue-500/15 px-2 py-1 text-[11px] text-blue-300 hover:bg-blue-500/25 disabled:opacity-40"
+      >
+        {saving ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Camera className="h-3 w-3" />
+        )}
+        Save screenshot
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        disabled={saving}
+        className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 disabled:opacity-40"
+        aria-label="Cancel screenshot"
+      >
+        <X className="h-3 w-3" />
       </button>
     </div>
   );
