@@ -50,7 +50,7 @@ export type DrawingPatch = Partial<
 
 export async function createDrawing(
   projectId: string,
-  fields: DrawingPatch & { drawing_number?: string },
+  fields: DrawingPatch,
 ): Promise<Drawing> {
   const { data, error } = await supabase
     .from("drawings")
@@ -151,7 +151,7 @@ export type RfiPatch = Partial<
 export async function createRfi(
   projectId: string,
   rfiNumber: number,
-  fields: RfiPatch & { question?: string },
+  fields: RfiPatch,
 ): Promise<Rfi> {
   const { data, error } = await supabase
     .from("rfis")
