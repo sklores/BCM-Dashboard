@@ -107,33 +107,70 @@ export async function POST(req: Request) {
   }
 
   try {
-    const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
+    const baseParams = {
       model: "claude-opus-4-7",
-      max_tokens: 2048,
-      messages: [{ role: "user", content: userContent }],
+      max_tokens: 4096,
+      thinking: { type: "adaptive" as const },
+      messages: [{ role: "user" as const, content: userContent }],
       output_config: {
         format: {
-          type: "json_schema",
+          type: "json_schema" as const,
           schema: SCHEMA,
         },
       },
     };
-    if (isUrl) {
-      params.tools = [
-        { type: "web_fetch_20260209", name: "web_fetch" },
-      ];
-    }
 
-    const response = await client.messages.create(params);
+    let response;
+    if (isUrl) {
+      // web_fetch is a server tool that requires a beta header. Force the
+      // tool with tool_choice so Claude actually fetches the page rather
+      // than guessing/returning nulls.
+      response = await client.beta.messages.create({
+        ...baseParams,
+        betas: ["web-fetch-2026-02-09"],
+        tools: [{ type: "web_fetch_20260209", name: "web_fetch" }],
+        tool_choice: { type: "tool", name: "web_fetch" },
+      });
+    } else {
+      response = await client.messages.create(baseParams);
+    }
 
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
       return NextResponse.json(
-        { error: "No text content in Claude response" },
+        {
+          error:
+            "Claude returned no text block — the URL may have been blocked or unfetchable. Try uploading a spec sheet PDF instead.",
+        },
         { status: 502 },
       );
     }
-    const parsed = JSON.parse(textBlock.text) as Parsed;
+    let parsed: Parsed;
+    try {
+      parsed = JSON.parse(textBlock.text) as Parsed;
+    } catch {
+      return NextResponse.json(
+        { error: "Claude response wasn't valid JSON: " + textBlock.text.slice(0, 200) },
+        { status: 502 },
+      );
+    }
+
+    // If everything came back null, surface that as an error rather than
+    // silently creating a blank material.
+    const hasAnyValue = Object.values(parsed).some(
+      (v) => v !== null && v !== undefined && v !== "",
+    );
+    if (!hasAnyValue) {
+      return NextResponse.json(
+        {
+          error: isUrl
+            ? "Couldn't extract product details from that URL. The site may block automated fetching, or the page lacks structured product info. Try uploading the spec sheet PDF instead."
+            : "Couldn't extract product details from that file.",
+        },
+        { status: 502 },
+      );
+    }
+
     return NextResponse.json(parsed);
   } catch (err) {
     if (err instanceof Anthropic.APIError) {
