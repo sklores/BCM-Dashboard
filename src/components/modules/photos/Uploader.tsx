@@ -32,19 +32,19 @@ async function analyzeWithClaude(url: string): Promise<PhotoAnalysis | null> {
 
 async function extractTakenAt(file: File): Promise<string | null> {
   try {
-    const exif = await exifr.parse(file, {
-      tiff: false,
-      ifd0: false,
-      exif: ["DateTimeOriginal"],
-    });
-    const d = exif?.DateTimeOriginal as Date | undefined;
+    // Array shorthand: only pull these tags. Avoids strict-typed Options shape.
+    const exif = await exifr.parse(file, ["DateTimeOriginal"]);
+    const d = exif?.DateTimeOriginal as Date | string | undefined;
     if (d instanceof Date && !Number.isNaN(d.getTime())) {
       return d.toISOString();
+    }
+    if (typeof d === "string") {
+      const parsed = new Date(d);
+      if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
     }
   } catch {
     // no exif — fall through
   }
-  // Fallback: file lastModified is sometimes the photo date for camera files
   if (file.lastModified) return new Date(file.lastModified).toISOString();
   return null;
 }
