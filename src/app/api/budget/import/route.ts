@@ -148,7 +148,7 @@ export async function POST(req: Request) {
   const schema = kind === "clarifications" ? CLAR_SCHEMA : BUDGET_SCHEMA;
 
   try {
-    const stream = client.messages.stream({
+    const response = await client.messages.create({
       model: "claude-opus-4-7",
       max_tokens: 32000,
       thinking: { type: "adaptive" },
@@ -163,7 +163,6 @@ export async function POST(req: Request) {
         },
       ],
     });
-    const response = await stream.finalMessage();
 
     const block = response.content.find((b) => b.type === "text");
     if (!block || block.type !== "text") {

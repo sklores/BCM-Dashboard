@@ -648,11 +648,30 @@ function BulkImportSection({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
+      const raw = await res.text();
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `Parse failed: ${res.status}`);
+        let detail = `${res.status}`;
+        try {
+          const j = JSON.parse(raw);
+          detail = j.error || detail;
+        } catch {
+          if (raw) detail += ` ${raw.slice(0, 200)}`;
+        }
+        throw new Error(`Parse failed: ${detail}`);
       }
-      const j = (await res.json()) as { contractors: ImportRow[] };
+      if (!raw) {
+        throw new Error(
+          "Server returned an empty response. Try splitting the list into smaller chunks.",
+        );
+      }
+      let j: { contractors: ImportRow[] };
+      try {
+        j = JSON.parse(raw);
+      } catch {
+        throw new Error(
+          "Couldn't parse server response: " + raw.slice(0, 200),
+        );
+      }
       setParsed(j.contractors ?? []);
       setPickedAll(true);
     } catch (e) {
