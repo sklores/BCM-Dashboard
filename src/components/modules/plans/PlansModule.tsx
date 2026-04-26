@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
   Loader2,
-  Map,
+  Map as MapIcon,
   Maximize2,
   MessageSquare,
   Minimize2,
@@ -135,7 +135,7 @@ export function PlansModule({ projectId }: ModuleProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
-        <Map className="h-6 w-6 text-blue-400" />
+        <MapIcon className="h-6 w-6 text-blue-400" />
         <h1 className="text-2xl font-semibold text-zinc-100">Plans</h1>
       </div>
 
@@ -1739,7 +1739,7 @@ function PdfViewer({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center gap-3 border-b border-zinc-800 px-5 py-3">
-          <Map className="h-5 w-5 text-blue-400" />
+          <MapIcon className="h-5 w-5 text-blue-400" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold text-zinc-100">
               {drawing.title || "Untitled drawing"}
@@ -1958,7 +1958,7 @@ function ExtractionReviewPanel({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950">
       <div className="flex shrink-0 items-center gap-3 border-b border-zinc-800 px-5 py-3">
-        <Map className="h-5 w-5 text-blue-400" />
+        <MapIcon className="h-5 w-5 text-blue-400" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-semibold text-zinc-100">
             {drawing.title || "Untitled drawing"}
