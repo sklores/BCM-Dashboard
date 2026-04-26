@@ -15,6 +15,7 @@ export const STANDARD_DRAWING_TYPES = [
   "shop_drawings",
   "stamped",
   "horizontal",
+  "takeoffs",
 ] as const;
 
 export const DRAWING_TYPE_LABEL: Record<string, string> = {
@@ -25,6 +26,7 @@ export const DRAWING_TYPE_LABEL: Record<string, string> = {
   shop_drawings: "Shop Drawings",
   stamped: "Stamped",
   horizontal: "Horizontal",
+  takeoffs: "Takeoffs",
 };
 
 export type Drawing = {
