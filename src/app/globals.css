@@ -51,16 +51,17 @@ html.bcm-light body {
   color: var(--bcm-text);
 }
 
-/* --- Backgrounds --- */
+/* --- Backgrounds: every zinc-* background is white. No grays anywhere
+       in the light theme. Sidebar / top bar are re-overridden below. --- */
 html.bcm-light .bg-zinc-950,
-html.bcm-light [class*="bg-zinc-950\\/"] {
-  background-color: var(--bcm-bg) !important;
-}
+html.bcm-light [class*="bg-zinc-950\\/"],
 html.bcm-light .bg-zinc-900,
 html.bcm-light [class*="bg-zinc-900\\/"],
 html.bcm-light .bg-zinc-800,
-html.bcm-light [class*="bg-zinc-800\\/"] {
-  background-color: var(--bcm-card) !important;
+html.bcm-light [class*="bg-zinc-800\\/"],
+html.bcm-light .bg-zinc-700,
+html.bcm-light [class*="bg-zinc-700\\/"] {
+  background-color: #ffffff !important;
 }
 
 /* --- Text --- */
@@ -193,12 +194,12 @@ html.bcm-light .bg-black\/85 {
   /* leave as-is; dark backdrops work in both themes */
 }
 
-/* --- Hover states: keep surfaces white, lift via accent border/text --- */
-html.bcm-light .hover\:bg-zinc-900:hover,
-html.bcm-light .hover\:bg-zinc-900\/40:hover,
-html.bcm-light .hover\:bg-zinc-800:hover,
-html.bcm-light .hover\:bg-zinc-800\/60:hover {
-  background-color: #ffffff !important;
+/* --- Hover states: subtle #F5F5F5 instead of darker grays --- */
+html.bcm-light [class*="hover\\:bg-zinc-950"]:hover,
+html.bcm-light [class*="hover\\:bg-zinc-900"]:hover,
+html.bcm-light [class*="hover\\:bg-zinc-800"]:hover,
+html.bcm-light [class*="hover\\:bg-zinc-700"]:hover {
+  background-color: #f5f5f5 !important;
 }
 html.bcm-light .hover\:border-zinc-700:hover,
 html.bcm-light .hover\:border-zinc-600:hover {
