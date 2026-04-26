@@ -67,7 +67,7 @@ export async function POST(req: Request) {
   if (isUrl) {
     userContent.push({
       type: "text",
-      text: `${PROMPT_BASE}\n\nFetch this product page and extract the details: ${body.url}`,
+      text: `${PROMPT_BASE}\n\nFetch this product page using the code execution tool (urllib or requests) and extract the details. URL: ${body.url}`,
     });
   } else if (body.fileBase64 && body.mimeType) {
     if (body.mimeType === "application/pdf") {
@@ -122,12 +122,15 @@ export async function POST(req: Request) {
 
     let response;
     if (isUrl) {
-      // web_fetch is a server tool. tool_choice forces Claude to actually
-      // fetch the page rather than producing null JSON without trying.
+      // web_fetch_20260209 is only invokable from inside the
+      // code_execution_20260120 sandbox. Claude writes Python that uses
+      // urllib/requests to fetch the page, then produces the JSON answer.
       response = await client.messages.create({
         ...baseParams,
-        tools: [{ type: "web_fetch_20260209", name: "web_fetch" }],
-        tool_choice: { type: "tool", name: "web_fetch" },
+        tools: [
+          { type: "code_execution_20260120", name: "code_execution" },
+          { type: "web_fetch_20260209", name: "web_fetch" },
+        ],
       });
     } else {
       response = await client.messages.create(baseParams);
