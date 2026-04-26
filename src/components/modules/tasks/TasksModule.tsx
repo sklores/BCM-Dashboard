@@ -90,7 +90,7 @@ export function TasksModule({ projectId }: ModuleProps) {
   const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date());
   const [fullscreen, setFullscreen] = useState(false);
 
-  // Esc to exit fullscreen
+  // Esc to exit fullscreen (in addition to browser-native Esc on FS)
   useEffect(() => {
     if (!fullscreen) return;
     function onKey(e: KeyboardEvent) {
@@ -99,6 +99,41 @@ export function TasksModule({ projectId }: ModuleProps) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [fullscreen]);
+
+  // Keep our internal state in sync when the user exits browser fullscreen
+  // via the browser UI / Esc / F11.
+  useEffect(() => {
+    function onFsChange() {
+      if (!document.fullscreenElement && fullscreen) {
+        setFullscreen(false);
+      }
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", onFsChange);
+  }, [fullscreen]);
+
+  // Request / exit browser fullscreen alongside the in-app overlay so the
+  // browser chrome (tabs / address bar) collapses too.
+  async function toggleFullscreen() {
+    const next = !fullscreen;
+    setFullscreen(next);
+    try {
+      if (next) {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+      } else {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch {
+      // requestFullscreen can be rejected (no user gesture, blocked, etc.).
+      // The in-app overlay still covers the dashboard so the user gets the
+      // intent either way.
+    }
+  }
 
   useEffect(() => {
     if (role === "super") return;
@@ -352,7 +387,7 @@ export function TasksModule({ projectId }: ModuleProps) {
         </h1>
         <button
           type="button"
-          onClick={() => setFullscreen((v) => !v)}
+          onClick={toggleFullscreen}
           className="ml-auto flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
           aria-label={fullscreen ? "Exit full screen" : "Full screen"}
           title={fullscreen ? "Exit full screen (Esc)" : "Full screen"}
