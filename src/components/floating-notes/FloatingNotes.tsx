@@ -462,7 +462,16 @@ function FloatingNotesWindow({
       w.document.body.style.fontFamily =
         getComputedStyle(document.body).fontFamily;
       w.document.title = "Notes";
-      w.addEventListener("pagehide", () => setPipWindow(null), { once: true });
+      // When the OS-level window is dismissed, fully close the notes
+      // surface — don't fall back to the in-browser draggable panel.
+      w.addEventListener(
+        "pagehide",
+        () => {
+          setPipWindow(null);
+          close();
+        },
+        { once: true },
+      );
       setPipWindow(w);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pop-out failed");
