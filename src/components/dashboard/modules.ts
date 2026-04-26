@@ -14,6 +14,9 @@ import {
   CalendarDays,
   Building2,
   Inbox,
+  Calculator,
+  Gavel,
+  FileSignature,
   type LucideIcon,
 } from "lucide-react";
 import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
@@ -23,6 +26,9 @@ import { MaterialsModule } from "@/components/modules/materials/MaterialsModule"
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
 import { TasksModule } from "@/components/modules/tasks/TasksModule";
+import { EstimatingModule } from "@/components/modules/estimating/EstimatingModule";
+import { BidSolicitationModule } from "@/components/modules/bid-solicitation/BidSolicitationModule";
+import { ContractsModule } from "@/components/modules/contracts/ContractsModule";
 import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
 
 export type ModuleProps = {
@@ -52,5 +58,8 @@ export const modules: ModuleDef[] = [
   { key: "notes",     label: "Notes",     icon: StickyNote,   Component: PlaceholderModule },
   { key: "messages",  label: "Messages",  icon: Inbox,        Component: MessagesModule    },
   { key: "calendar",  label: "Calendar",  icon: CalendarDays, Component: PlaceholderModule },
-  { key: "client",    label: "Client",    icon: Building2,    Component: PlaceholderModule },
+  { key: "client",       label: "Client",          icon: Building2,      Component: PlaceholderModule       },
+  { key: "estimating",   label: "Estimating",      icon: Calculator,     Component: EstimatingModule        },
+  { key: "bids",         label: "Bid Solicitation", icon: Gavel,         Component: BidSolicitationModule   },
+  { key: "contracts",    label: "Contracts",       icon: FileSignature,  Component: ContractsModule         },
 ];
