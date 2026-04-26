@@ -499,26 +499,33 @@ function TextEntryOverlay({
   onCancel: () => void;
   color: string;
 }) {
-  // Position is computed relative to the canvas's parent (the wrapping
-  // relative div). The overlay canvas fills its parent via inset-0, so
-  // canvas-pixel (x, y) translates to parent-px via the canvas's display
-  // ratio.
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Position is relative to the canvas's immediate parent (the wrapping
+  // relative div). The overlay canvas fills its parent via inset-0.
   const c = overlay.current;
-  if (!c) return null;
-  const rect = c.getBoundingClientRect();
-  if (rect.width === 0) return null;
-  const scaleX = rect.width / c.width;
-  const scaleY = rect.height / c.height;
+  const rect = c?.getBoundingClientRect();
+  const scaleX = rect && c ? rect.width / c.width : 1;
+  const scaleY = rect && c ? rect.height / c.height : 1;
   const left = prompt.x * scaleX;
   const top = prompt.y * scaleY;
 
+  // Focus deliberately after mount (autoFocus is unreliable across pointer
+  // events).
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
     <div
-      className="absolute z-10"
+      className="absolute z-20 flex items-center gap-1 rounded-md border border-blue-500 bg-zinc-950/95 p-1 shadow-xl"
       style={{ left, top, transform: "translateY(-4px)" }}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
     >
       <input
-        autoFocus
+        ref={inputRef}
         type="text"
         value={prompt.value}
         onChange={(e) =>
@@ -533,16 +540,25 @@ function TextEntryOverlay({
             onCancel();
           }
         }}
-        onBlur={onCommit}
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-        placeholder="Type, then Enter"
-        className="rounded border border-blue-500 bg-zinc-950/95 px-1.5 py-0.5 text-sm font-bold outline-none shadow-lg"
-        style={{
-          color,
-          minWidth: "120px",
-        }}
+        placeholder="Type your note"
+        className="rounded bg-zinc-900 px-1.5 py-0.5 text-sm font-bold outline-none"
+        style={{ color, minWidth: "180px" }}
       />
+      <button
+        type="button"
+        onClick={onCommit}
+        className="rounded bg-blue-500/20 px-2 py-1 text-[11px] text-blue-300 hover:bg-blue-500/30"
+      >
+        Add
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+        aria-label="Cancel"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
