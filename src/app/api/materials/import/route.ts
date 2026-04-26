@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
 
 const PROMPT_BASE = `You are extracting construction material details for a project catalog. Identify the product and return ONLY the JSON shape requested. Use null for any field you cannot determine. Don't invent values. For "price", return a plain number in USD without currency symbols.`;
 
@@ -79,11 +80,17 @@ export async function POST(req: Request) {
         html.slice(html.length - MAX / 2);
     }
 
+    const viaNote =
+      result.via === "wayback"
+        ? " (via Wayback Machine snapshot)"
+        : result.via === "jina"
+          ? " (via Jina Reader)"
+          : result.via === "googlebot"
+            ? " (fetched as Googlebot)"
+            : "";
     userContent.push({
       type: "text",
-      text: `${PROMPT_BASE}\n\nThe HTML below is the product page at ${body.url}${
-        result.via === "wayback" ? " (via Wayback Machine snapshot)" : ""
-      }. Extract the product details.\n\nHTML:\n\n${html}`,
+      text: `${PROMPT_BASE}\n\nThe HTML/text below is the product page at ${body.url}${viaNote}. Extract the product details.\n\nHTML:\n\n${html}`,
     });
   } else if (body.fileBase64 && body.mimeType) {
     if (body.mimeType === "application/pdf") {
@@ -191,72 +198,162 @@ export async function POST(req: Request) {
 
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+const GOOGLEBOT_UA =
+  "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
-async function directFetch(url: string): Promise<Response> {
-  return fetch(url, {
-    redirect: "follow",
-    headers: {
-      "User-Agent": BROWSER_UA,
-      Accept:
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-  });
+type ToolName = "direct" | "googlebot" | "jina" | "wayback";
+
+const DEFAULT_ORDER: ToolName[] = ["direct", "googlebot", "jina", "wayback"];
+
+const TOOL_LABEL: Record<ToolName, string> = {
+  direct: "Direct browser fetch",
+  googlebot: "Googlebot UA fetch",
+  jina: "Jina Reader",
+  wayback: "Wayback Machine",
+};
+
+type ToolResult =
+  | { ok: true; html: string }
+  | { ok: false; reason: string };
+
+async function tryDirect(url: string, ua: string): Promise<ToolResult> {
+  try {
+    const r = await fetch(url, {
+      redirect: "follow",
+      headers: {
+        "User-Agent": ua,
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
+    if (!r.ok) return { ok: false, reason: `HTTP ${r.status}` };
+    const html = await r.text();
+    return { ok: true, html };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : "fetch failed" };
+  }
 }
 
-async function fetchProductPage(
-  url: string,
-): Promise<
-  | { ok: true; html: string; via: "direct" | "wayback" }
-  | { ok: false; error: string }
-> {
-  // 1. Try a direct fetch with a browser User-Agent.
-  let directStatus: number | null = null;
-  let directError: string | null = null;
+async function tryJina(url: string): Promise<ToolResult> {
+  // Jina Reader strips a page to clean LLM-friendly text.
+  // No auth required for low volume.
   try {
-    const r = await directFetch(url);
-    if (r.ok) {
-      const html = await r.text();
-      return { ok: true, html, via: "direct" };
-    }
-    directStatus = r.status;
+    const r = await fetch(`https://r.jina.ai/${url}`, {
+      headers: { "User-Agent": BROWSER_UA, Accept: "text/plain" },
+    });
+    if (!r.ok) return { ok: false, reason: `HTTP ${r.status}` };
+    const text = await r.text();
+    if (!text || text.length < 50) return { ok: false, reason: "empty body" };
+    return { ok: true, html: text };
   } catch (err) {
-    directError = err instanceof Error ? err.message : String(err);
+    return { ok: false, reason: err instanceof Error ? err.message : "fetch failed" };
   }
+}
 
-  // 2. Fall back to the Wayback Machine's most recent snapshot.
+async function tryWayback(url: string): Promise<ToolResult> {
   try {
     const lookup = await fetch(
       `https://archive.org/wayback/available?url=${encodeURIComponent(url)}`,
       { headers: { "User-Agent": BROWSER_UA } },
     );
-    if (lookup.ok) {
-      const j = (await lookup.json()) as {
-        archived_snapshots?: { closest?: { available?: boolean; url?: string } };
-      };
-      const snap = j.archived_snapshots?.closest;
-      if (snap?.available && snap.url) {
-        const snapRes = await fetch(snap.url, {
-          headers: { "User-Agent": BROWSER_UA },
-          redirect: "follow",
-        });
-        if (snapRes.ok) {
-          const html = await snapRes.text();
-          return { ok: true, html, via: "wayback" };
-        }
-      }
-    }
+    if (!lookup.ok) return { ok: false, reason: `availability HTTP ${lookup.status}` };
+    const j = (await lookup.json()) as {
+      archived_snapshots?: { closest?: { available?: boolean; url?: string } };
+    };
+    const snap = j.archived_snapshots?.closest;
+    if (!snap?.available || !snap.url)
+      return { ok: false, reason: "no snapshot available" };
+    const snapRes = await fetch(snap.url, {
+      headers: { "User-Agent": BROWSER_UA },
+      redirect: "follow",
+    });
+    if (!snapRes.ok)
+      return { ok: false, reason: `snapshot HTTP ${snapRes.status}` };
+    const html = await snapRes.text();
+    return { ok: true, html };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : "fetch failed" };
+  }
+}
+
+async function runTool(tool: ToolName, url: string): Promise<ToolResult> {
+  switch (tool) {
+    case "direct":
+      return tryDirect(url, BROWSER_UA);
+    case "googlebot":
+      return tryDirect(url, GOOGLEBOT_UA);
+    case "jina":
+      return tryJina(url);
+    case "wayback":
+      return tryWayback(url);
+  }
+}
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
   } catch {
-    /* fall through to error */
+    return "";
+  }
+}
+
+async function preferredFirstTool(domain: string): Promise<ToolName | null> {
+  if (!domain) return null;
+  const { data } = await supabase
+    .from("url_import_attempts")
+    .select("tool")
+    .eq("domain", domain)
+    .eq("succeeded", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const tool = data?.[0]?.tool as ToolName | undefined;
+  return tool && DEFAULT_ORDER.includes(tool) ? tool : null;
+}
+
+async function logAttempt(
+  domain: string,
+  tool: ToolName,
+  succeeded: boolean,
+): Promise<void> {
+  if (!domain) return;
+  try {
+    await supabase
+      .from("url_import_attempts")
+      .insert({ domain, tool, succeeded });
+  } catch {
+    /* logging is best-effort */
+  }
+}
+
+async function fetchProductPage(
+  url: string,
+): Promise<
+  | { ok: true; html: string; via: ToolName }
+  | { ok: false; error: string }
+> {
+  const domain = getDomain(url);
+  // Try the most-recently-successful tool for this domain first.
+  const preferred = await preferredFirstTool(domain);
+  const order: ToolName[] = preferred
+    ? [preferred, ...DEFAULT_ORDER.filter((t) => t !== preferred)]
+    : DEFAULT_ORDER;
+
+  const log: Array<{ tool: ToolName; reason: string }> = [];
+  for (const tool of order) {
+    const r = await runTool(tool, url);
+    await logAttempt(domain, tool, r.ok);
+    if (r.ok) {
+      return { ok: true, html: r.html, via: tool };
+    }
+    log.push({ tool, reason: r.reason });
   }
 
-  const directLine = directStatus
-    ? `Direct fetch returned ${directStatus}.`
-    : directError
-      ? `Direct fetch errored: ${directError}.`
-      : "Direct fetch failed.";
+  const breakdown = log
+    .map((l) => `${TOOL_LABEL[l.tool]} (${l.reason})`)
+    .join("; ");
   return {
     ok: false,
-    error: `${directLine} No Wayback Machine snapshot available either. Try uploading the spec sheet PDF instead.`,
+    error: `Tried every available fetcher and none worked. ${breakdown}. Try uploading the spec sheet PDF instead.`,
   };
 }
