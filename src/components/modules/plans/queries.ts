@@ -577,6 +577,8 @@ export async function pushExtractionToContractors(
   const { error } = await supabase.from("subs").insert({
     name: ex.label || "Pending review",
     notes: ex.description ? `${ex.description}\n\n${tag}` : tag,
+    source_extraction_id: ex.id,
+    source_drawing_id: drawing.id,
   });
   if (error) throw error;
   await updateExtraction(ex.id, { pushed_to_contractors: true });

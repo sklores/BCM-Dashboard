@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronRight,
   Loader2,
   Plus,
   Search,
@@ -26,6 +27,7 @@ import {
   type SubPatch,
 } from "./queries";
 import type { ProjectSub, Sub } from "./types";
+import { ContractorDetailPage } from "./ContractorDetailPage";
 
 type ImportRow = {
   name: string | null;
@@ -51,6 +53,7 @@ export function SubsModule({ projectId }: ModuleProps) {
 
   const [search, setSearch] = useState("");
   const [showExisting, setShowExisting] = useState(false);
+  const [openSubId, setOpenSubId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -233,6 +236,17 @@ export function SubsModule({ projectId }: ModuleProps) {
     }
   }
 
+  const openSub = openSubId ? subs.find((s) => s.id === openSubId) : null;
+  if (openSub) {
+    return (
+      <ContractorDetailPage
+        projectId={projectId}
+        sub={openSub}
+        onBack={() => setOpenSubId(null)}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
@@ -384,28 +398,39 @@ export function SubsModule({ projectId }: ModuleProps) {
                       className="text-zinc-300"
                     />
                   </td>
-                  <td className="w-32 px-3 py-2 text-right">
-                    {editable && (
-                      <div className="inline-flex items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFromProject(sub.id)}
-                          className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300 hover:border-amber-500/50 hover:text-amber-300"
-                          title="Remove from this project"
-                        >
-                          Remove
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteFromDirectory(sub.id)}
-                          className="rounded p-1 text-zinc-600 hover:bg-zinc-800 hover:text-red-400"
-                          aria-label="Delete from directory"
-                          title="Delete from directory (every project)"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
+                  <td className="w-40 px-3 py-2 text-right">
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setOpenSubId(sub.id)}
+                        className="inline-flex items-center gap-0.5 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+                        title="Open contractor detail"
+                      >
+                        Open
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                      {editable && (
+                        <div className="inline-flex items-center gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFromProject(sub.id)}
+                            className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300 hover:border-amber-500/50 hover:text-amber-300"
+                            title="Remove from this project"
+                          >
+                            Remove
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFromDirectory(sub.id)}
+                            className="rounded p-1 text-zinc-600 hover:bg-zinc-800 hover:text-red-400"
+                            aria-label="Delete from directory"
+                            title="Delete from directory (every project)"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
