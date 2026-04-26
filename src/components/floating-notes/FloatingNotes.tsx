@@ -454,19 +454,38 @@ function FloatingNotesWindow({
       });
       // Copy stylesheets so Tailwind classes work in the popped window.
       copyStylesIntoWindow(w);
-      // Match the dashboard dark theme.
-      w.document.documentElement.classList.add("dark");
       w.document.body.style.margin = "0";
-      w.document.body.style.background = "#09090b"; // zinc-950
-      w.document.body.style.color = "#f4f4f5"; // zinc-100
       w.document.body.style.fontFamily =
         getComputedStyle(document.body).fontFamily;
       w.document.title = "Notes";
+      // Mirror the parent's day/night theme: copy the bcm-light class
+      // onto the popped doc and refresh on every parent class change so
+      // toggling theme in the dashboard propagates live to PiP.
+      const applyTheme = () => {
+        const isLight =
+          document.documentElement.classList.contains("bcm-light");
+        if (isLight) {
+          w.document.documentElement.classList.add("bcm-light");
+          w.document.body.style.background = "#ffffff";
+          w.document.body.style.color = "#1a1a1a";
+        } else {
+          w.document.documentElement.classList.remove("bcm-light");
+          w.document.body.style.background = "#09090b";
+          w.document.body.style.color = "#f4f4f5";
+        }
+      };
+      applyTheme();
+      const themeObserver = new MutationObserver(applyTheme);
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
       // When the OS-level window is dismissed, fully close the notes
       // surface — don't fall back to the in-browser draggable panel.
       w.addEventListener(
         "pagehide",
         () => {
+          themeObserver.disconnect();
           setPipWindow(null);
           close();
         },
