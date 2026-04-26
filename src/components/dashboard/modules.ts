@@ -24,6 +24,7 @@ import { ContactsModule } from "@/components/modules/contacts/ContactsModule";
 import { PermitsModule } from "@/components/modules/permits/PermitsModule";
 import { NotesModule } from "@/components/modules/notes/NotesModule";
 import { ReportsModule } from "@/components/modules/reports/ReportsModule";
+import { BudgetModule } from "@/components/modules/budget/BudgetModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
@@ -56,7 +57,7 @@ export const modules: ModuleDef[] = [
   { key: "contacts",   label: "Contacts",   icon: Users,         Component: ContactsModule    },
   { key: "tasks",      label: "Tasks",      icon: ListChecks,    Component: TasksModule       },
   { key: "photos",     label: "Photos",     icon: ImageIcon,     Component: PhotosModule      },
-  { key: "budget",     label: "Budget",     icon: Wallet,        Component: PlaceholderModule },
+  { key: "budget",     label: "Budget",     icon: Wallet,        Component: BudgetModule      },
   { key: "schedule",   label: "Schedule",   icon: BarChart3,     Component: ScheduleModule    },
   { key: "plans",      label: "Plans",      icon: Map,           Component: PlansModule       },
   { key: "permits",    label: "Permits",    icon: ScrollText,    Component: PermitsModule     },
