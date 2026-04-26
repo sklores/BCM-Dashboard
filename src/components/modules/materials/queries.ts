@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { Material, MaterialPhoto } from "./types";
 
 const COLUMNS =
-  "id, project_id, product_name, manufacturer, supplier, sku, price, lead_time, notes, is_finish, room, color_finish, installation_notes";
+  "id, project_id, product_name, manufacturer, supplier, sku, price, lead_time, notes, is_finish, room, color_finish, installation_notes, status, dimensions, qty, source_url";
 
 const PHOTO_COLUMNS =
   "id, material_id, storage_path, storage_url, sort_order, created_at";

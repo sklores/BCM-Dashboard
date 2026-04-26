@@ -24,7 +24,14 @@ import {
   uploadMaterialPhoto,
   type MaterialPatch,
 } from "./queries";
-import type { Material, MaterialPhoto } from "./types";
+import {
+  DETAILED_STATUSES,
+  DETAILED_STATUS_LABEL,
+  DETAILED_STATUS_STYLE,
+  type DetailedStatus,
+  type Material,
+  type MaterialPhoto,
+} from "./types";
 
 type Section = "catalog" | "detailed" | "finish";
 
@@ -36,6 +43,8 @@ type ImportedFields = {
   price: number | null;
   lead_time: string | null;
   notes: string | null;
+  dimensions: string | null;
+  qty: number | null;
 };
 
 async function fileToBase64(file: File): Promise<string> {
@@ -48,7 +57,10 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-function importedToPatch(fields: ImportedFields): Partial<MaterialPatch> {
+function importedToPatch(
+  fields: ImportedFields,
+  sourceUrl?: string,
+): Partial<MaterialPatch> {
   return {
     product_name: fields.product_name ?? "New material",
     manufacturer: fields.manufacturer,
@@ -57,6 +69,9 @@ function importedToPatch(fields: ImportedFields): Partial<MaterialPatch> {
     price: fields.price,
     lead_time: fields.lead_time,
     notes: fields.notes,
+    dimensions: fields.dimensions,
+    qty: fields.qty,
+    source_url: sourceUrl ?? null,
   };
 }
 
@@ -152,7 +167,7 @@ export function MaterialsModule({ projectId }: ModuleProps) {
       const parsed = await importViaApi({ url });
       const created = await createMaterial(
         projectId,
-        importedToPatch(parsed),
+        importedToPatch(parsed, url),
       );
       setMaterials((rows) => [...rows, created]);
       setUrlValue("");
@@ -488,7 +503,12 @@ export function MaterialsModule({ projectId }: ModuleProps) {
       )}
 
       {!loading && !error && section === "detailed" && (
-        <DetailedListPlaceholder materials={materials} />
+        <DetailedListSection
+          materials={materials}
+          photos={photos}
+          editable={editable}
+          onUpdate={handleUpdate}
+        />
       )}
 
       {!loading && !error && section === "finish" && (
@@ -506,107 +526,214 @@ export function MaterialsModule({ projectId }: ModuleProps) {
   );
 }
 
-type DetailedStatus = "looking" | "found" | "purchased" | "onsite";
+function DetailedListSection({
+  materials,
+  photos,
+  editable,
+  onUpdate,
+}: {
+  materials: Material[];
+  photos: MaterialPhoto[];
+  editable: boolean;
+  onUpdate: (id: string, patch: MaterialPatch) => Promise<void>;
+}) {
+  const [statusFilter, setStatusFilter] = useState<DetailedStatus | "all">(
+    "all",
+  );
 
-const DETAILED_STATUS_LABEL: Record<DetailedStatus, string> = {
-  looking: "Looking",
-  found: "Found",
-  purchased: "Purchased",
-  onsite: "On site",
-};
+  const counts = DETAILED_STATUSES.reduce(
+    (acc, s) => {
+      acc[s] = materials.filter((m) => m.status === s).length;
+      return acc;
+    },
+    {} as Record<DetailedStatus, number>,
+  );
 
-const DETAILED_STATUS_STYLE: Record<DetailedStatus, string> = {
-  looking: "bg-zinc-800 text-zinc-300 border-zinc-700",
-  found: "bg-blue-500/10 text-blue-300 border-blue-500/30",
-  purchased: "bg-amber-500/10 text-amber-300 border-amber-500/30",
-  onsite: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
-};
+  const filtered = statusFilter === "all"
+    ? materials
+    : materials.filter((m) => m.status === statusFilter);
 
-function DetailedListPlaceholder({ materials }: { materials: Material[] }) {
-  const sample: Array<{ name: string; status: DetailedStatus }> =
-    materials.length > 0
-      ? materials.slice(0, 6).map((m, i) => ({
-          name: m.product_name,
-          status: (
-            ["looking", "found", "purchased", "onsite"] as DetailedStatus[]
-          )[i % 4],
-        }))
-      : [
-          { name: "Sample item — kitchen tile", status: "looking" },
-          { name: "Sample item — vanity faucet", status: "found" },
-          { name: "Sample item — pendant lights", status: "purchased" },
-          { name: "Sample item — interior doors", status: "onsite" },
-        ];
+  function photoCount(id: string): number {
+    return photos.filter((p) => p.material_id === id).length;
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-md border border-dashed border-zinc-700 bg-zinc-900/40 p-4 text-sm">
-        <div className="flex items-center gap-2 text-zinc-300">
-          <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs text-blue-300">
-            Placeholder
-          </span>
-          <span>Detailed List — UI preview only</span>
-        </div>
-        <p className="mt-2 text-xs text-zinc-500">
-          Will track status (Looking / Found / Purchased / On site), dimensions,
-          quantity, photos, and supplier links per item. Not wired to the
-          database yet.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {(Object.keys(DETAILED_STATUS_LABEL) as DetailedStatus[]).map((s) => (
-          <span
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setStatusFilter("all")}
+          className={`rounded-full border px-2 py-0.5 text-xs transition ${
+            statusFilter === "all"
+              ? "border-blue-500/40 bg-blue-500/10 text-blue-300"
+              : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-700"
+          }`}
+        >
+          All ({materials.length})
+        </button>
+        {DETAILED_STATUSES.map((s) => (
+          <button
             key={s}
-            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${DETAILED_STATUS_STYLE[s]}`}
+            type="button"
+            onClick={() => setStatusFilter(s)}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
+              statusFilter === s
+                ? DETAILED_STATUS_STYLE[s]
+                : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200"
+            }`}
           >
-            {DETAILED_STATUS_LABEL[s]}
-          </span>
+            {DETAILED_STATUS_LABEL[s]} ({counts[s]})
+          </button>
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-md border border-zinc-800 opacity-80">
-        <table className="w-full min-w-[820px] text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
-              <th className="px-3 py-2 font-medium">Item</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 font-medium">Dimensions</th>
-              <th className="px-3 py-2 font-medium">Qty</th>
-              <th className="px-3 py-2 font-medium">Supplier</th>
-              <th className="px-3 py-2 font-medium">Photos</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sample.map((row, i) => (
-              <tr key={i} className="border-b border-zinc-900">
-                <td className="px-3 py-2 text-zinc-300">{row.name}</td>
-                <td className="px-3 py-2">
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs ${DETAILED_STATUS_STYLE[row.status]}`}
-                  >
-                    {DETAILED_STATUS_LABEL[row.status]}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-zinc-500">—</td>
-                <td className="px-3 py-2 text-zinc-500">—</td>
-                <td className="px-3 py-2 text-zinc-500">—</td>
-                <td className="px-3 py-2">
-                  <div className="flex gap-1">
-                    {Array.from({ length: 3 }).map((_, j) => (
-                      <div
-                        key={j}
-                        className="h-8 w-8 rounded border border-dashed border-zinc-700 bg-zinc-900"
-                      />
-                    ))}
-                  </div>
-                </td>
+      {filtered.length === 0 ? (
+        <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 p-6 text-center text-sm text-zinc-500">
+          {materials.length === 0
+            ? "No materials yet — add some in the Catalog tab or via URL/PDF import."
+            : "No materials match this filter."}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-md border border-zinc-800">
+          <table className="w-full min-w-[920px] text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
+                <th className="px-3 py-2 font-medium">Item</th>
+                <th className="w-32 px-3 py-2 font-medium">Status</th>
+                <th className="px-3 py-2 font-medium">Dimensions</th>
+                <th className="w-20 px-3 py-2 font-medium">Qty</th>
+                <th className="px-3 py-2 font-medium">Supplier</th>
+                <th className="w-20 px-3 py-2 font-medium">Photos</th>
+                <th className="w-20 px-3 py-2 font-medium">Source</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((m) => (
+                <tr
+                  key={m.id}
+                  className="border-b border-zinc-900 hover:bg-zinc-900/40"
+                >
+                  <td className="px-3 py-2">
+                    <div className="text-zinc-100">{m.product_name}</div>
+                    {m.manufacturer && (
+                      <div className="text-[11px] text-zinc-500">
+                        {m.manufacturer}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={m.status}
+                      disabled={!editable}
+                      onChange={(e) =>
+                        onUpdate(m.id, {
+                          status: e.target.value as DetailedStatus,
+                        })
+                      }
+                      className={`rounded-full border px-2 py-0.5 text-[11px] outline-none [color-scheme:dark] ${DETAILED_STATUS_STYLE[m.status]}`}
+                    >
+                      {DETAILED_STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {DETAILED_STATUS_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <EditableText
+                      value={m.dimensions ?? ""}
+                      editable={editable}
+                      placeholder="—"
+                      onCommit={(v) =>
+                        onUpdate(m.id, { dimensions: v || null })
+                      }
+                      className="text-zinc-300"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <NumberCell
+                      value={m.qty}
+                      editable={editable}
+                      onCommit={(v) => onUpdate(m.id, { qty: v })}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <EditableText
+                      value={m.supplier ?? ""}
+                      editable={editable}
+                      placeholder="—"
+                      onCommit={(v) => onUpdate(m.id, { supplier: v || null })}
+                      className="text-zinc-300"
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className="inline-flex items-center gap-1 text-zinc-400">
+                      <ImagePlus className="h-3 w-3 text-zinc-500" />
+                      {photoCount(m.id)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    {m.source_url ? (
+                      <a
+                        href={m.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-blue-400 hover:underline"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Open
+                      </a>
+                    ) : (
+                      <span className="text-xs text-zinc-600">—</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
+  );
+}
+
+function NumberCell({
+  value,
+  editable,
+  onCommit,
+}: {
+  value: number | null;
+  editable: boolean;
+  onCommit: (next: number | null) => void;
+}) {
+  const [draft, setDraft] = useState(value === null ? "" : String(value));
+  useEffect(() => setDraft(value === null ? "" : String(value)), [value]);
+
+  if (!editable) {
+    return (
+      <span className="text-zinc-300">
+        {value === null ? <span className="text-zinc-500">—</span> : value}
+      </span>
+    );
+  }
+  return (
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const next = draft.trim() === "" ? null : Number(draft);
+        if (next === null || !Number.isNaN(next)) {
+          if (next !== value) onCommit(next);
+        } else {
+          setDraft(value === null ? "" : String(value));
+        }
+      }}
+      placeholder="—"
+      className="w-full cursor-text rounded bg-transparent px-1 py-0.5 text-zinc-300 outline-none transition placeholder:text-zinc-600 hover:bg-zinc-800/60 focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 [color-scheme:dark] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+    />
   );
 }
 

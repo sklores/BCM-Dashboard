@@ -2,7 +2,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-const PROMPT_BASE = `You are extracting construction material details for a project catalog. Identify the product and return ONLY the JSON shape requested. Use null for any field you cannot determine. Don't invent values. For "price", return a plain number in USD without currency symbols.`;
+const PROMPT_BASE = `You are extracting construction material details for a project catalog. Identify the product and return ONLY the JSON shape requested. Use null for any field you cannot determine. Don't invent values.
+
+For "price", return a plain number in USD without currency symbols.
+For "dimensions", capture the most relevant size info as a single human-readable string (e.g. "8' x 4' x 1/2\\"", "12 in x 24 in", "200 sq ft per case", "3 5/8\\" x 96\\""). Combine length/width/thickness/coverage as needed.
+For "qty", capture the unit count when listed (e.g. case of 200 → 200, sold individually → 1). Use null if unclear.`;
 
 const SCHEMA = {
   type: "object",
@@ -14,6 +18,8 @@ const SCHEMA = {
     price: { type: ["number", "null"] },
     lead_time: { type: ["string", "null"] },
     notes: { type: ["string", "null"] },
+    dimensions: { type: ["string", "null"] },
+    qty: { type: ["number", "null"] },
   },
   required: [
     "product_name",
@@ -23,6 +29,8 @@ const SCHEMA = {
     "price",
     "lead_time",
     "notes",
+    "dimensions",
+    "qty",
   ],
   additionalProperties: false,
 } as const;
@@ -35,6 +43,8 @@ type Parsed = {
   price: number | null;
   lead_time: string | null;
   notes: string | null;
+  dimensions: string | null;
+  qty: number | null;
 };
 
 export async function POST(req: Request) {
