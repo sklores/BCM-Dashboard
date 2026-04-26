@@ -30,7 +30,9 @@ import {
   SUBMITTAL_STATUS_LABEL,
   SUBMITTAL_STATUS_TEXT,
   type Drawing,
+  type DrawingExtraction,
   type DrawingPin,
+  type ExtractionCategory,
   type Rfi,
   type RfiStatus,
   type Submittal,
@@ -1821,7 +1823,7 @@ function ExtractionReviewPanel({
   onClose: () => void;
   onDrawingUpdated: (d: Drawing) => void;
 }) {
-  const [items, setItems] = useState<import("./types").DrawingExtraction[]>(
+  const [items, setItems] = useState<DrawingExtraction[]>(
     [],
   );
   const [loading, setLoading] = useState(true);
@@ -1882,7 +1884,7 @@ function ExtractionReviewPanel({
     }
   }
 
-  async function pushToMaterials(it: import("./types").DrawingExtraction) {
+  async function pushToMaterials(it: DrawingExtraction) {
     try {
       await pushExtractionToMaterials(projectId, drawing, it);
       setItems((rows) =>
@@ -1894,7 +1896,7 @@ function ExtractionReviewPanel({
       setErr(e instanceof Error ? e.message : "Push failed");
     }
   }
-  async function pushToNotes(it: import("./types").DrawingExtraction) {
+  async function pushToNotes(it: DrawingExtraction) {
     try {
       await pushExtractionToNotes(projectId, drawing, it);
       setItems((rows) =>
@@ -1906,7 +1908,7 @@ function ExtractionReviewPanel({
       setErr(e instanceof Error ? e.message : "Push failed");
     }
   }
-  async function pushToSchedule(it: import("./types").DrawingExtraction) {
+  async function pushToSchedule(it: DrawingExtraction) {
     try {
       await pushExtractionToSchedule(projectId, drawing, it);
       setItems((rows) =>
@@ -1931,7 +1933,7 @@ function ExtractionReviewPanel({
   const grouped = useMemo(() => {
     const map = new Map<
       string,
-      import("./types").DrawingExtraction[]
+      DrawingExtraction[]
     >();
     for (const it of items) {
       const c = it.category ?? "Other";
@@ -2069,7 +2071,7 @@ function ExtractionReviewPanel({
                 const isCollapsed = collapsed.has(cat);
                 const dot =
                   EXTRACTION_CATEGORY_DOT[
-                    cat as import("./types").ExtractionCategory
+                    cat as ExtractionCategory
                   ] ?? "bg-zinc-500";
                 return (
                   <div
@@ -2123,12 +2125,12 @@ function ExtractionRow({
   onPushToNotes,
   onPushToSchedule,
 }: {
-  it: import("./types").DrawingExtraction;
+  it: DrawingExtraction;
   editable: boolean;
   onPatch: (id: string, p: Parameters<typeof updateExtraction>[1]) => Promise<void>;
-  onPushToMaterials: (it: import("./types").DrawingExtraction) => Promise<void>;
-  onPushToNotes: (it: import("./types").DrawingExtraction) => Promise<void>;
-  onPushToSchedule: (it: import("./types").DrawingExtraction) => Promise<void>;
+  onPushToMaterials: (it: DrawingExtraction) => Promise<void>;
+  onPushToNotes: (it: DrawingExtraction) => Promise<void>;
+  onPushToSchedule: (it: DrawingExtraction) => Promise<void>;
 }) {
   const [labelDraft, setLabelDraft] = useState(it.label ?? "");
   useEffect(() => setLabelDraft(it.label ?? ""), [it.label]);
