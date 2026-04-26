@@ -48,7 +48,20 @@ export type DrawingExtraction = {
   status: ExtractionStatus;
   pushed_to_materials: boolean;
   pushed_to_schedule: boolean;
-  pushed_to_notes: boolean;
+  pushed_to_notes: boolean; // legacy — kept for backward compat
+  pushed_to_contractors: boolean;
+  pushed_to_permits: boolean;
+  pushed_to_general_notes: boolean;
+  created_at: string;
+};
+
+export type GeneralNote = {
+  id: string;
+  project_id: string;
+  drawing_id: string | null;
+  body: string | null;
+  source: string | null;
+  source_extraction_id: string | null;
   created_at: string;
 };
 

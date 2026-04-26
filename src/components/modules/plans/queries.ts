@@ -363,7 +363,7 @@ export async function fetchUserOptions(
 // ---------- Drawing Extractions ----------
 
 const EXTRACTION_COLUMNS =
-  "id, drawing_id, category, label, description, location_description, confidence, status, pushed_to_materials, pushed_to_schedule, pushed_to_notes, created_at";
+  "id, drawing_id, category, label, description, location_description, confidence, status, pushed_to_materials, pushed_to_schedule, pushed_to_notes, pushed_to_contractors, pushed_to_permits, pushed_to_general_notes, created_at";
 
 export async function fetchExtractions(
   drawingId: string,
@@ -414,6 +414,9 @@ export async function updateExtraction(
     pushed_to_materials: boolean;
     pushed_to_schedule: boolean;
     pushed_to_notes: boolean;
+    pushed_to_contractors: boolean;
+    pushed_to_permits: boolean;
+    pushed_to_general_notes: boolean;
   }>,
 ): Promise<void> {
   const { error } = await supabase
@@ -559,4 +562,129 @@ export async function runExtractDrawing(
     extraction_completed_at: new Date().toISOString(),
   });
   return inserted;
+}
+
+// ---------- Additional push targets ----------
+
+export async function pushExtractionToContractors(
+  drawing: { id: string; title: string | null; drawing_number: string | null },
+  ex: { id: string; label: string | null; description: string | null },
+): Promise<void> {
+  const ref = drawing.drawing_number
+    ? `${drawing.drawing_number}${drawing.title ? ` · ${drawing.title}` : ""}`
+    : drawing.title || "Drawing extraction";
+  const tag = `From drawing extraction: ${ref} (extraction id ${ex.id})`;
+  const { error } = await supabase.from("subs").insert({
+    name: ex.label || "Pending review",
+    notes: ex.description ? `${ex.description}\n\n${tag}` : tag,
+  });
+  if (error) throw error;
+  await updateExtraction(ex.id, { pushed_to_contractors: true });
+}
+
+export async function pushExtractionToPermits(
+  projectId: string,
+  drawing: { id: string; title: string | null; drawing_number: string | null },
+  ex: {
+    id: string;
+    label: string | null;
+    description: string | null;
+    category: string | null;
+  },
+): Promise<void> {
+  const ref = drawing.drawing_number
+    ? `${drawing.drawing_number}${drawing.title ? ` · ${drawing.title}` : ""}`
+    : drawing.title || "Drawing extraction";
+  const tag = `From drawing extraction: ${ref} (extraction id ${ex.id})`;
+  // Map common categories to a permit type when obvious; leave null otherwise.
+  const cat = (ex.category ?? "").toLowerCase();
+  const permitType = cat.includes("electrical")
+    ? "electrical"
+    : cat.includes("plumbing")
+      ? "plumbing"
+      : cat.includes("mechanical")
+        ? "mechanical"
+        : null;
+  const { error } = await supabase.from("permits").insert({
+    project_id: projectId,
+    permit_type: permitType,
+    permit_number: ex.label || null,
+    status: "not_applied",
+    notes: ex.description ? `${ex.description}\n\n${tag}` : tag,
+  });
+  if (error) throw error;
+  await updateExtraction(ex.id, { pushed_to_permits: true });
+}
+
+export async function pushExtractionToGeneralNotes(
+  projectId: string,
+  drawingId: string,
+  ex: {
+    id: string;
+    label: string | null;
+    description: string | null;
+    category: string | null;
+  },
+): Promise<void> {
+  const body = `[${ex.category ?? "Note"}] ${ex.label ?? ""}${
+    ex.description ? `\n\n${ex.description}` : ""
+  }`;
+  const { error } = await supabase.from("general_notes").insert({
+    project_id: projectId,
+    drawing_id: drawingId,
+    body,
+    source: "drawing_extraction",
+    source_extraction_id: ex.id,
+  });
+  if (error) throw error;
+  await updateExtraction(ex.id, { pushed_to_general_notes: true });
+}
+
+// ---------- General Notes CRUD ----------
+
+const GENERAL_NOTE_COLUMNS =
+  "id, project_id, drawing_id, body, source, source_extraction_id, created_at";
+
+export async function fetchGeneralNotes(
+  projectId: string,
+): Promise<import("./types").GeneralNote[]> {
+  const { data, error } = await supabase
+    .from("general_notes")
+    .select(GENERAL_NOTE_COLUMNS)
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as import("./types").GeneralNote[];
+}
+
+export async function createGeneralNote(
+  projectId: string,
+  body: string,
+): Promise<import("./types").GeneralNote> {
+  const { data, error } = await supabase
+    .from("general_notes")
+    .insert({ project_id: projectId, body, source: "manual" })
+    .select(GENERAL_NOTE_COLUMNS)
+    .single();
+  if (error) throw error;
+  return data as import("./types").GeneralNote;
+}
+
+export async function updateGeneralNote(
+  id: string,
+  body: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("general_notes")
+    .update({ body })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteGeneralNote(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("general_notes")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
 }

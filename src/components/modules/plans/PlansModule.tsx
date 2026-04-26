@@ -33,6 +33,7 @@ import {
   type DrawingExtraction,
   type DrawingPin,
   type ExtractionCategory,
+  type GeneralNote,
   type Rfi,
   type RfiStatus,
   type Submittal,
@@ -58,9 +59,16 @@ import {
   postRfiToMessages,
   uploadDrawingPdf,
   postSubmittalAlert,
+  createGeneralNote,
+  deleteGeneralNote,
+  fetchGeneralNotes,
+  pushExtractionToContractors,
+  pushExtractionToGeneralNotes,
   pushExtractionToMaterials,
   pushExtractionToNotes,
+  pushExtractionToPermits,
   pushExtractionToSchedule,
+  updateGeneralNote,
   runExtractDrawing,
   runTitleBlockRead,
   supersedeDrawing,
@@ -73,7 +81,12 @@ import {
   type SubmittalPatch,
 } from "./queries";
 
-type Section = "drawings" | "rfis" | "submittals" | "annotations";
+type Section =
+  | "drawings"
+  | "rfis"
+  | "submittals"
+  | "annotations"
+  | "general_notes";
 
 function canCreateRfi(role: Role): boolean {
   return role === "owner" || role === "pm" || role === "apm";
@@ -100,6 +113,7 @@ export function PlansModule({ projectId }: ModuleProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [extracting, setExtracting] = useState<Drawing | null>(null);
+  const [generalNotes, setGeneralNotes] = useState<GeneralNote[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -107,12 +121,13 @@ export function PlansModule({ projectId }: ModuleProps) {
     setError(null);
     (async () => {
       try {
-        const [d, r, s, p, u] = await Promise.all([
+        const [d, r, s, p, u, gn] = await Promise.all([
           fetchDrawings(projectId),
           fetchRfis(projectId),
           fetchSubmittals(projectId),
           fetchPins(projectId),
           fetchUserOptions(projectId),
+          fetchGeneralNotes(projectId),
         ]);
         if (cancelled) return;
         setDrawings(d);
@@ -120,6 +135,7 @@ export function PlansModule({ projectId }: ModuleProps) {
         setSubmittals(s);
         setPins(p);
         setUsers(u);
+        setGeneralNotes(gn);
       } catch (err) {
         if (!cancelled)
           setError(err instanceof Error ? err.message : "Failed to load");
@@ -158,6 +174,7 @@ export function PlansModule({ projectId }: ModuleProps) {
             ["rfis", "RFIs"],
             ["submittals", "Submittals"],
             ["annotations", "Annotations"],
+            ["general_notes", "General Notes"],
           ] as const
         ).map(([key, label]) => {
           const active = key === section;
@@ -412,6 +429,42 @@ export function PlansModule({ projectId }: ModuleProps) {
 
       {!loading && !error && section === "annotations" && (
         <AnnotationsSection pins={pins} drawings={drawings} users={users} />
+      )}
+
+      {!loading && !error && section === "general_notes" && (
+        <GeneralNotesSection
+          notes={generalNotes}
+          drawings={drawings}
+          editable={editable}
+          onAdd={async () => {
+            try {
+              const created = await createGeneralNote(projectId, "");
+              setGeneralNotes((rows) => [created, ...rows]);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed");
+            }
+          }}
+          onUpdate={async (id, body) => {
+            setGeneralNotes((rows) =>
+              rows.map((n) => (n.id === id ? { ...n, body } : n)),
+            );
+            try {
+              await updateGeneralNote(id, body);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Failed");
+            }
+          }}
+          onDelete={async (id) => {
+            const prev = generalNotes;
+            setGeneralNotes((rows) => rows.filter((n) => n.id !== id));
+            try {
+              await deleteGeneralNote(id);
+            } catch (err) {
+              setGeneralNotes(prev);
+              setError(err instanceof Error ? err.message : "Failed");
+            }
+          }}
+        />
       )}
 
       {extracting && (
@@ -1920,6 +1973,42 @@ function ExtractionReviewPanel({
       setErr(e instanceof Error ? e.message : "Push failed");
     }
   }
+  async function pushToContractors(it: DrawingExtraction) {
+    try {
+      await pushExtractionToContractors(drawing, it);
+      setItems((rows) =>
+        rows.map((x) =>
+          x.id === it.id ? { ...x, pushed_to_contractors: true } : x,
+        ),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Push failed");
+    }
+  }
+  async function pushToPermits(it: DrawingExtraction) {
+    try {
+      await pushExtractionToPermits(projectId, drawing, it);
+      setItems((rows) =>
+        rows.map((x) =>
+          x.id === it.id ? { ...x, pushed_to_permits: true } : x,
+        ),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Push failed");
+    }
+  }
+  async function pushToGeneralNotes(it: DrawingExtraction) {
+    try {
+      await pushExtractionToGeneralNotes(projectId, drawing.id, it);
+      setItems((rows) =>
+        rows.map((x) =>
+          x.id === it.id ? { ...x, pushed_to_general_notes: true } : x,
+        ),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Push failed");
+    }
+  }
 
   function toggle(cat: string) {
     setCollapsed((s) => {
@@ -2102,6 +2191,9 @@ function ExtractionReviewPanel({
                             onPushToMaterials={pushToMaterials}
                             onPushToNotes={pushToNotes}
                             onPushToSchedule={pushToSchedule}
+                            onPushToContractors={pushToContractors}
+                            onPushToPermits={pushToPermits}
+                            onPushToGeneralNotes={pushToGeneralNotes}
                           />
                         ))}
                       </ul>
@@ -2124,6 +2216,9 @@ function ExtractionRow({
   onPushToMaterials,
   onPushToNotes,
   onPushToSchedule,
+  onPushToContractors,
+  onPushToPermits,
+  onPushToGeneralNotes,
 }: {
   it: DrawingExtraction;
   editable: boolean;
@@ -2131,19 +2226,17 @@ function ExtractionRow({
   onPushToMaterials: (it: DrawingExtraction) => Promise<void>;
   onPushToNotes: (it: DrawingExtraction) => Promise<void>;
   onPushToSchedule: (it: DrawingExtraction) => Promise<void>;
+  onPushToContractors: (it: DrawingExtraction) => Promise<void>;
+  onPushToPermits: (it: DrawingExtraction) => Promise<void>;
+  onPushToGeneralNotes: (it: DrawingExtraction) => Promise<void>;
 }) {
+  // Suppress lint warning for the legacy notes push that's no longer wired
+  // through any UI affordance.
+  void onPushToNotes;
   const [labelDraft, setLabelDraft] = useState(it.label ?? "");
   useEffect(() => setLabelDraft(it.label ?? ""), [it.label]);
   const c = it.confidence ?? 0;
   const conf = c >= 0.8 ? "bg-emerald-400" : c >= 0.5 ? "bg-yellow-400" : "bg-red-400";
-  const cat = it.category ?? "Other";
-
-  // Spec-driven push affordances per category.
-  const showMat = ["Architectural", "Structural", "Mechanical", "Electrical", "Plumbing"].includes(
-    cat,
-  );
-  const showSched = ["Mechanical", "Electrical"].includes(cat);
-  const showNotes = ["Specification", "Other"].includes(cat);
 
   const dimmed = it.status === "rejected";
   return (
@@ -2204,36 +2297,46 @@ function ExtractionRow({
               <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0 text-[10px] text-emerald-300">
                 Confirmed
               </span>
-              {showMat && (
-                <button
-                  type="button"
-                  onClick={() => onPushToMaterials(it)}
-                  disabled={it.pushed_to_materials}
-                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
-                >
-                  {it.pushed_to_materials ? "✓ Materials" : "→ Materials"}
-                </button>
-              )}
-              {showSched && (
-                <button
-                  type="button"
-                  onClick={() => onPushToSchedule(it)}
-                  disabled={it.pushed_to_schedule}
-                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
-                >
-                  {it.pushed_to_schedule ? "✓ Schedule" : "→ Schedule"}
-                </button>
-              )}
-              {showNotes && (
-                <button
-                  type="button"
-                  onClick={() => onPushToNotes(it)}
-                  disabled={it.pushed_to_notes}
-                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
-                >
-                  {it.pushed_to_notes ? "✓ Notes" : "→ Notes"}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => onPushToContractors(it)}
+                disabled={it.pushed_to_contractors}
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+              >
+                {it.pushed_to_contractors ? "✓ Contractors" : "→ Contractors"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onPushToMaterials(it)}
+                disabled={it.pushed_to_materials}
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+              >
+                {it.pushed_to_materials ? "✓ Materials" : "→ Materials"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onPushToPermits(it)}
+                disabled={it.pushed_to_permits}
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+              >
+                {it.pushed_to_permits ? "✓ Permits" : "→ Permits"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onPushToGeneralNotes(it)}
+                disabled={it.pushed_to_general_notes}
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+              >
+                {it.pushed_to_general_notes ? "✓ General Notes" : "→ General Notes"}
+              </button>
+              <button
+                type="button"
+                onClick={() => onPushToSchedule(it)}
+                disabled={it.pushed_to_schedule}
+                className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[10px] text-zinc-300 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+              >
+                {it.pushed_to_schedule ? "✓ Schedule" : "→ Schedule"}
+              </button>
             </>
           )}
           {it.status === "rejected" && (
@@ -2248,5 +2351,124 @@ function ExtractionRow({
         </div>
       )}
     </li>
+  );
+}
+
+function GeneralNotesSection({
+  notes,
+  drawings,
+  editable,
+  onAdd,
+  onUpdate,
+  onDelete,
+}: {
+  notes: GeneralNote[];
+  drawings: Drawing[];
+  editable: boolean;
+  onAdd: () => Promise<void>;
+  onUpdate: (id: string, body: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-zinc-500">
+          A jot-list for items that don't fit on a drawing or in another module.
+          Push extracted items here from the drawing review panel.
+        </p>
+        {editable && (
+          <button
+            type="button"
+            onClick={() => {
+              void onAdd();
+            }}
+            className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200 hover:border-blue-500 hover:text-blue-400"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add note
+          </button>
+        )}
+      </div>
+
+      {notes.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 p-8 text-center">
+          <Sparkles className="h-6 w-6 text-zinc-600" />
+          <p className="text-sm text-zinc-400">No general notes yet.</p>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {notes.map((n) => {
+            const drawing = n.drawing_id
+              ? drawings.find((d) => d.id === n.drawing_id)
+              : null;
+            return (
+              <li
+                key={n.id}
+                className="rounded-md border border-zinc-800 bg-zinc-900/60 p-3"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+                  <div className="flex items-center gap-2">
+                    {drawing && (
+                      <span className="rounded-full border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-zinc-400">
+                        {drawing.drawing_number ?? "—"}{" "}
+                        {drawing.title ? `· ${drawing.title}` : ""}
+                      </span>
+                    )}
+                    {n.source && (
+                      <span className="text-zinc-600">{n.source}</span>
+                    )}
+                    <span className="text-zinc-600">
+                      {fmtDate(n.created_at.slice(0, 10))}
+                    </span>
+                  </div>
+                  {editable && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void onDelete(n.id);
+                      }}
+                      className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+                      aria-label="Delete note"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <GeneralNoteBody
+                  value={n.body ?? ""}
+                  editable={editable}
+                  onCommit={(body) => onUpdate(n.id, body)}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function GeneralNoteBody({
+  value,
+  editable,
+  onCommit,
+}: {
+  value: string;
+  editable: boolean;
+  onCommit: (body: string) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  return (
+    <textarea
+      value={draft}
+      disabled={!editable}
+      placeholder="Type a general note…"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft !== value) void onCommit(draft);
+      }}
+      rows={2}
+      className="w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+    />
   );
 }
