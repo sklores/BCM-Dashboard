@@ -5,7 +5,9 @@ import {
   ExternalLink,
   Loader2,
   Map,
+  Maximize2,
   MessageSquare,
+  Minimize2,
   Pin,
   Plus,
   Sparkles,
@@ -1615,6 +1617,45 @@ function PdfViewer({
   drawing: Drawing;
   onClose: () => void;
 }) {
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // Sync state when the user exits browser fullscreen via Esc / browser UI.
+  useEffect(() => {
+    function onFsChange() {
+      if (!document.fullscreenElement && fullscreen) {
+        setFullscreen(false);
+      }
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", onFsChange);
+  }, [fullscreen]);
+
+  // Exit browser fullscreen if the viewer is dismissed while in FS.
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  async function toggleFullscreen() {
+    const next = !fullscreen;
+    setFullscreen(next);
+    try {
+      if (next) {
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
+      } else if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      /* request can be rejected; the in-app overlay still applies */
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col bg-black/70"
@@ -1642,6 +1683,20 @@ function PdfViewer({
               )}
             </div>
           </div>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+            title={fullscreen ? "Exit full screen (Esc)" : "Full screen"}
+          >
+            {fullscreen ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
+            {fullscreen ? "Exit full screen" : "Full screen"}
+          </button>
           {drawing.pdf_url && (
             <a
               href={drawing.pdf_url}
