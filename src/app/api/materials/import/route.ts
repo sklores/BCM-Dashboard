@@ -36,26 +36,6 @@ type Parsed = {
   notes: string | null;
 };
 
-async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: {
-      // Many product sites filter out blank user agents; pretend to be a desktop browser.
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0 Safari/537.36",
-      Accept: "text/html,application/xhtml+xml",
-    },
-    redirect: "follow",
-    // Don't hold a route open forever on slow sites.
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    throw new Error(`URL fetch failed: ${res.status} ${res.statusText}`);
-  }
-  const html = await res.text();
-  // Trim to a reasonable size — most product pages have what we need in the head + first body section.
-  return html.slice(0, 200_000);
-}
-
 export async function POST(req: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -77,25 +57,17 @@ export async function POST(req: Request) {
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  // Build the request differently depending on the source.
+  // - URL → use Claude's server-side web_fetch tool. Anthropic fetches the
+  //   page from their infrastructure, dodging most bot blocks.
+  // - File → send a document/image content block directly.
+  const isUrl = !!body.url;
+
   const userContent: Anthropic.Messages.ContentBlockParam[] = [];
-  if (body.url) {
-    let html: string;
-    try {
-      html = await fetchHtml(body.url);
-    } catch (err) {
-      return NextResponse.json(
-        {
-          error:
-            err instanceof Error
-              ? err.message
-              : "Failed to fetch the URL",
-        },
-        { status: 400 },
-      );
-    }
+  if (isUrl) {
     userContent.push({
       type: "text",
-      text: `${PROMPT_BASE}\n\nProduct page URL: ${body.url}\n\nPage HTML (truncated):\n\n${html}`,
+      text: `${PROMPT_BASE}\n\nFetch this product page and extract the details: ${body.url}`,
     });
   } else if (body.fileBase64 && body.mimeType) {
     if (body.mimeType === "application/pdf") {
@@ -135,9 +107,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    const response = await client.messages.create({
+    const params: Anthropic.Messages.MessageCreateParamsNonStreaming = {
       model: "claude-opus-4-7",
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{ role: "user", content: userContent }],
       output_config: {
         format: {
@@ -145,7 +117,14 @@ export async function POST(req: Request) {
           schema: SCHEMA,
         },
       },
-    });
+    };
+    if (isUrl) {
+      params.tools = [
+        { type: "web_fetch_20260209", name: "web_fetch" },
+      ];
+    }
+
+    const response = await client.messages.create(params);
 
     const textBlock = response.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {

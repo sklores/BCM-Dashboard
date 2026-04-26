@@ -80,20 +80,20 @@ export function DashboardShell({ projects }: Props) {
 
   return (
     <RoleProvider role="owner">
-      <div className="flex flex-1 flex-col bg-zinc-950 text-zinc-100">
+      <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
         <TopBar
           projects={projects}
           activeProjectId={activeProjectId}
           onProjectChange={setActiveProjectId}
           onOpenSettings={() => setShowSettings(true)}
         />
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <Sidebar
             modules={orderedModules}
             activeModule={activeModuleKey}
             onModuleChange={setActiveModuleKey}
           />
-          <main className="flex-1 overflow-auto p-10">
+          <main className="h-full flex-1 overflow-y-auto p-10">
             <ActiveModule
               projectId={activeProjectId}
               moduleKey={moduleDef.key}
