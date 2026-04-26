@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Package, Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Globe, Loader2, Package, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
@@ -13,12 +13,51 @@ import {
 } from "./queries";
 import type { Material } from "./types";
 
+type ImportedFields = {
+  product_name: string | null;
+  manufacturer: string | null;
+  supplier: string | null;
+  sku: string | null;
+  price: number | null;
+  lead_time: string | null;
+  notes: string | null;
+};
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function importedToPatch(fields: ImportedFields): Partial<MaterialPatch> {
+  return {
+    product_name: fields.product_name ?? "New material",
+    manufacturer: fields.manufacturer,
+    supplier: fields.supplier,
+    sku: fields.sku,
+    price: fields.price,
+    lead_time: fields.lead_time,
+    notes: fields.notes,
+  };
+}
+
 export function MaterialsModule({ projectId }: ModuleProps) {
   const role = useRole();
   const editable = canEdit(role);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Import controls
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [urlValue, setUrlValue] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +104,81 @@ export function MaterialsModule({ projectId }: ModuleProps) {
     }
   }
 
+  async function importViaApi(
+    payload:
+      | { url: string }
+      | { fileBase64: string; mimeType: string },
+  ): Promise<ImportedFields> {
+    const res = await fetch("/api/materials/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(
+        body.error || `Import failed: ${res.status} ${res.statusText}`,
+      );
+    }
+    return (await res.json()) as ImportedFields;
+  }
+
+  async function handleImportUrl() {
+    const url = urlValue.trim();
+    if (!url) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const parsed = await importViaApi({ url });
+      const created = await createMaterial(
+        projectId,
+        importedToPatch(parsed),
+      );
+      setMaterials((rows) => [...rows, created]);
+      setUrlValue("");
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleImportFiles(files: File[]) {
+    const supported = files.filter(
+      (f) =>
+        f.type === "application/pdf" || f.type.startsWith("image/"),
+    );
+    if (supported.length === 0) {
+      setImportError("Drop a PDF or image file (spec sheet or product photo).");
+      return;
+    }
+    setImporting(true);
+    setImportError(null);
+    try {
+      for (const file of supported) {
+        const fileBase64 = await fileToBase64(file);
+        const parsed = await importViaApi({ fileBase64, mimeType: file.type });
+        const created = await createMaterial(
+          projectId,
+          importedToPatch(parsed),
+        );
+        setMaterials((rows) => [...rows, created]);
+      }
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    if (!editable) return;
+    const files = Array.from(e.dataTransfer.files);
+    handleImportFiles(files);
+  }
+
   async function handleDelete(id: string) {
     const prev = materials;
     setMaterials((rows) => rows.filter((m) => m.id !== id));
@@ -100,6 +214,79 @@ export function MaterialsModule({ projectId }: ModuleProps) {
             Catalog for this project. Pricing lives here; Schedule task cards
             link to entries via material_id.
           </p>
+
+          {editable && (
+            <div className="flex flex-col gap-3">
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed py-6 text-sm transition ${
+                  dragOver
+                    ? "border-blue-500 bg-blue-500/5 text-blue-300"
+                    : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
+                }`}
+              >
+                {importing ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+                ) : (
+                  <Upload className="h-5 w-5" />
+                )}
+                <span>
+                  Drop a spec sheet (PDF) or product photo — Claude will read
+                  it and add a material entry
+                </span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []);
+                    handleImportFiles(files);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Globe className="h-4 w-4 text-zinc-500" />
+                <input
+                  type="url"
+                  value={urlValue}
+                  onChange={(e) => setUrlValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleImportUrl();
+                  }}
+                  placeholder="…or paste a product URL"
+                  disabled={importing}
+                  className="flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                />
+                <button
+                  type="button"
+                  onClick={handleImportUrl}
+                  disabled={importing || urlValue.trim() === ""}
+                  className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+                >
+                  {importing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
+                  Import
+                </button>
+              </div>
+
+              {importError && (
+                <p className="text-xs text-red-400">{importError}</p>
+              )}
+            </div>
+          )}
 
           <div className="overflow-x-auto rounded-md border border-zinc-800">
             <table className="w-full min-w-[820px] text-sm">

@@ -16,10 +16,17 @@ export async function fetchMaterials(projectId: string): Promise<Material[]> {
 
 export type MaterialPatch = Partial<Omit<Material, "id" | "project_id">>;
 
-export async function createMaterial(projectId: string): Promise<Material> {
+export async function createMaterial(
+  projectId: string,
+  fields: Partial<MaterialPatch> = {},
+): Promise<Material> {
   const { data, error } = await supabase
     .from("materials")
-    .insert({ project_id: projectId, product_name: "New material" })
+    .insert({
+      project_id: projectId,
+      product_name: "New material",
+      ...fields,
+    })
     .select(COLUMNS)
     .single();
   if (error) throw error;
