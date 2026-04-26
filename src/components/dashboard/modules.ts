@@ -16,6 +16,7 @@ import {
   Inbox,
   Calculator,
   FileSignature,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
@@ -26,7 +27,6 @@ import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
 import { TasksModule } from "@/components/modules/tasks/TasksModule";
 import { EstimatingModule } from "@/components/modules/estimating/EstimatingModule";
-import { ContractsModule } from "@/components/modules/contracts/ContractsModule";
 import { PlansModule } from "@/components/modules/plans/PlansModule";
 import { ClientModule } from "@/components/modules/client/ClientModule";
 import { BillingModule } from "@/components/modules/billing/BillingModule";
@@ -46,20 +46,21 @@ export type ModuleDef = {
 };
 
 export const modules: ModuleDef[] = [
-  { key: "reports",   label: "Reports",   icon: FileText,     Component: PlaceholderModule },
-  { key: "materials", label: "Materials", icon: Package,      Component: MaterialsModule  },
-  { key: "subs",      label: "Subs",      icon: HardHat,      Component: SubsModule       },
-  { key: "team",      label: "Team",      icon: Users,        Component: TeamModule       },
-  { key: "tasks",     label: "Tasks",     icon: ListChecks,   Component: TasksModule       },
-  { key: "photos",    label: "Photos",    icon: ImageIcon,    Component: PhotosModule      },
-  { key: "budget",    label: "Billing",   icon: DollarSign,   Component: BillingModule     },
-  { key: "schedule",  label: "Schedule",  icon: BarChart3,    Component: ScheduleModule    },
-  { key: "plans",     label: "Plans",     icon: Map,          Component: PlansModule       },
-  { key: "permits",   label: "Permits",   icon: ScrollText,   Component: PlaceholderModule },
-  { key: "notes",     label: "Notes",     icon: StickyNote,   Component: PlaceholderModule },
-  { key: "messages",  label: "Messages",  icon: Inbox,        Component: MessagesModule    },
-  { key: "calendar",  label: "Calendar",  icon: CalendarDays, Component: PlaceholderModule },
-  { key: "client",       label: "Client",          icon: Building2,      Component: ClientModule            },
-  { key: "estimating",   label: "Estimating",      icon: Calculator,     Component: EstimatingModule        },
-  { key: "contracts",    label: "Contracts",       icon: FileSignature,  Component: ContractsModule         },
+  { key: "reports",    label: "Reports",    icon: FileText,      Component: PlaceholderModule },
+  { key: "estimating", label: "Estimating", icon: Calculator,    Component: EstimatingModule  },
+  { key: "paperwork",  label: "Paperwork",  icon: FileSignature, Component: PlaceholderModule },
+  { key: "materials",  label: "Materials",  icon: Package,       Component: MaterialsModule   },
+  { key: "subs",       label: "Subs",       icon: HardHat,       Component: SubsModule        },
+  { key: "team",       label: "Team",       icon: Users,         Component: TeamModule        },
+  { key: "tasks",      label: "Tasks",      icon: ListChecks,    Component: TasksModule       },
+  { key: "photos",     label: "Photos",     icon: ImageIcon,     Component: PhotosModule      },
+  { key: "budget",     label: "Budget",     icon: Wallet,        Component: PlaceholderModule },
+  { key: "schedule",   label: "Schedule",   icon: BarChart3,     Component: ScheduleModule    },
+  { key: "plans",      label: "Plans",      icon: Map,           Component: PlansModule       },
+  { key: "permits",    label: "Permits",    icon: ScrollText,    Component: PlaceholderModule },
+  { key: "notes",      label: "Notes",      icon: StickyNote,    Component: PlaceholderModule },
+  { key: "calendar",   label: "Calendar",   icon: CalendarDays,  Component: PlaceholderModule },
+  { key: "client",     label: "Client",     icon: Building2,     Component: ClientModule      },
+  { key: "messages",   label: "Messages",   icon: Inbox,         Component: MessagesModule    },
+  { key: "billing",    label: "Billing",    icon: DollarSign,    Component: BillingModule     },
 ];
