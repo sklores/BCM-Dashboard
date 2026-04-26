@@ -201,6 +201,21 @@ const REPORTS: ReportDef[] = [
       "Lien Releases",
     ],
   },
+  {
+    id: "punch_list",
+    name: "Punch List Report",
+    description:
+      "Complete punch list grouped by responsible sub and by location, with sign-off status and completion percentage.",
+    group: "Close Out",
+    icon: ClipboardCheck,
+    previewSections: [
+      "Project Header (name · date generated)",
+      "Summary Stats (total / completed / remaining / % complete)",
+      "By Subcontractor (item count, completed, list of items with status)",
+      "By Location (item count, completed, list of items with status)",
+      "Sign-off Status",
+    ],
+  },
 ];
 
 const GROUP_ORDER: Group[] = [

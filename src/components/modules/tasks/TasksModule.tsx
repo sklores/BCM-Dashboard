@@ -1,144 +1,120 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Calendar,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  Layout,
   ListChecks,
-  Mail,
+  Loader2,
+  Paperclip,
   Plus,
-  Trash2,
-  User as UserIcon,
+  RotateCw,
+  Upload,
   X,
 } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
-  STATUS_BORDER,
-  STATUS_COLUMNS,
-  STATUS_DOT,
-  STATUS_LABEL,
-  STATUS_TEXT,
-  type ProjectSubOption,
-  type ProjectTeamOption,
-  type Task,
-  type TaskStatus,
-} from "./types";
-import {
-  STATUS_VALUES,
+  addAssignee,
+  addDependency,
   createTask,
+  deleteAttachment,
   deleteTask,
-  fetchProjectSubOptions,
-  fetchProjectTeamOptions,
+  fetchAssignees,
+  fetchAttachments,
+  fetchContactOptions,
+  fetchDependencies,
+  fetchPunchListDetails,
   fetchTasks,
+  postAlert,
+  removeAssignee,
+  removeDependency,
   updateTask,
-  type TaskPatch,
+  uploadTaskAttachment,
+  upsertPunchListDetails,
 } from "./queries";
+import {
+  PRIORITIES,
+  PRIORITY_LABEL,
+  PRIORITY_STYLE,
+  RECURRING_FREQUENCIES,
+  RECURRING_FREQUENCY_LABEL,
+  TASK_STATUSES,
+  TASK_STATUS_LABEL,
+  TASK_STATUS_STYLE,
+  TASK_TYPES,
+  TASK_TYPE_LABEL,
+  TASK_TYPE_STYLE,
+  fmtDate,
+  isOverdue,
+  nextRecurringDate,
+  type ContactOption,
+  type Priority,
+  type PunchListDetails,
+  type PunchListPatch,
+  type RecurringFrequency,
+  type Task,
+  type TaskAssignee,
+  type TaskAttachment,
+  type TaskDependency,
+  type TaskPatch,
+  type TaskStatus,
+  type TaskType,
+} from "./types";
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
-function startOfDay(d: Date): Date {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function daysBetween(a: Date, b: Date): number {
-  return Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / MS_PER_DAY);
-}
-
-function fmtDate(s: string | null): string {
-  if (!s) return "—";
-  return new Date(s + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-type TimeTracking = {
-  openLabel: string | null;
-  dueLabel: string | null;
-  overdue: boolean;
-  dueSoon: boolean;
-};
-
-function trackTime(task: Task): TimeTracking {
-  const today = new Date();
-  let openLabel: string | null = null;
-  let dueLabel: string | null = null;
-  let overdue = false;
-  let dueSoon = false;
-
-  const startBasis = task.start_date
-    ? new Date(task.start_date + "T00:00:00")
-    : new Date(task.created_at);
-  if (startBasis) {
-    const days = Math.max(0, daysBetween(startBasis, today));
-    openLabel = `Open ${days}d`;
-  }
-
-  if (task.due_date) {
-    const due = new Date(task.due_date + "T00:00:00");
-    const days = daysBetween(today, due);
-    if (task.status === "complete") {
-      dueLabel = null;
-    } else if (days < 0) {
-      dueLabel = `Overdue ${Math.abs(days)}d`;
-      overdue = true;
-    } else if (days === 0) {
-      dueLabel = "Due today";
-      dueSoon = true;
-    } else {
-      dueLabel = `Due in ${days}d`;
-      if (days <= 2) dueSoon = true;
-    }
-  }
-
-  return { openLabel, dueLabel, overdue, dueSoon };
-}
-
-function nameForSub(
-  id: string | null,
-  options: ProjectSubOption[],
-): string | null {
-  if (!id) return null;
-  return options.find((o) => o.id === id)?.name ?? "Unknown sub";
-}
-
-function nameForUser(
-  id: string | null,
-  options: ProjectTeamOption[],
-): string | null {
-  if (!id) return null;
-  return options.find((o) => o.user_id === id)?.name ?? "Unnamed";
-}
+type View = "list" | "board" | "calendar";
 
 export function TasksModule({ projectId }: ModuleProps) {
   const role = useRole();
-  const editable = canEdit(role);
+  const editable = canEdit(role) || role === "apm";
+
+  const [view, setView] = useState<View>("list");
+  const [punchMode, setPunchMode] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [subOptions, setSubOptions] = useState<ProjectSubOption[]>([]);
-  const [teamOptions, setTeamOptions] = useState<ProjectTeamOption[]>([]);
+  const [assignees, setAssignees] = useState<TaskAssignee[]>([]);
+  const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
+  const [dependencies, setDependencies] = useState<TaskDependency[]>([]);
+  const [punchDetails, setPunchDetails] = useState<PunchListDetails[]>([]);
+  const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Task | null>(null);
-  const [showComplete, setShowComplete] = useState(false);
+  const [openTask, setOpenTask] = useState<Task | null>(null);
+  const [statusFilter, setStatusFilter] = useState<TaskStatus | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<TaskType | "all">("all");
+  const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date());
 
   useEffect(() => {
+    if (role === "super") return;
     let cancelled = false;
     setLoading(true);
     setError(null);
     (async () => {
       try {
-        const [taskRows, subs, team] = await Promise.all([
+        const [t, c] = await Promise.all([
           fetchTasks(projectId),
-          fetchProjectSubOptions(projectId),
-          fetchProjectTeamOptions(projectId),
+          fetchContactOptions(projectId),
         ]);
         if (cancelled) return;
-        setTasks(taskRows);
-        setSubOptions(subs);
-        setTeamOptions(team);
+        setTasks(t);
+        setContacts(c);
+        const ids = t.map((row) => row.id);
+        const [a, att, dep, pd] = await Promise.all([
+          fetchAssignees(ids),
+          fetchAttachments(ids),
+          fetchDependencies(ids),
+          fetchPunchListDetails(ids),
+        ]);
+        if (cancelled) return;
+        setAssignees(a);
+        setAttachments(att);
+        setDependencies(dep);
+        setPunchDetails(pd);
+        // Fire alerts on load (best effort)
+        scanForAtRiskTasks(projectId, t, dep);
       } catch (err) {
         if (!cancelled)
           setError(err instanceof Error ? err.message : "Failed to load tasks");
@@ -149,71 +125,300 @@ export function TasksModule({ projectId }: ModuleProps) {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, role]);
 
-  const counts = useMemo(() => {
-    const c: Record<TaskStatus, number> = {
-      not_started: 0,
-      in_progress: 0,
-      complete: 0,
-      delayed: 0,
-    };
-    for (const t of tasks) c[t.status] = (c[t.status] ?? 0) + 1;
-    return c;
-  }, [tasks]);
+  // ---- Filtered list ----
 
-  const overdueCount = useMemo(
-    () => tasks.filter((t) => t.status !== "complete" && trackTime(t).overdue).length,
-    [tasks],
-  );
+  const filtered = useMemo(() => {
+    return tasks.filter((t) => {
+      if (punchMode && t.task_type !== "punch_list") return false;
+      if (statusFilter !== "all" && t.status !== statusFilter) return false;
+      if (typeFilter !== "all" && t.task_type !== typeFilter) return false;
+      return true;
+    });
+  }, [tasks, punchMode, statusFilter, typeFilter]);
 
-  const visibleColumns = STATUS_COLUMNS.filter(
-    (c) => showComplete || c.key !== "complete",
-  );
+  // ---- Task CRUD ----
 
-  async function handleAdd() {
+  async function handleAddTask(extra: TaskPatch = {}) {
     try {
-      const created = await createTask(projectId, { title: "New task" });
+      const created = await createTask(projectId, {
+        task_type: punchMode ? "punch_list" : "general",
+        ...extra,
+      });
       setTasks((rows) => [created, ...rows]);
-      setSelected(created);
+      setOpenTask(created);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add task");
     }
   }
 
-  async function handleUpdate(id: string, patch: TaskPatch) {
+  async function handleUpdateTask(id: string, patch: TaskPatch) {
     const prev = tasks;
+    const previous = prev.find((t) => t.id === id);
     setTasks((rows) =>
       rows.map((t) => (t.id === id ? { ...t, ...patch } : t)),
     );
-    if (selected && selected.id === id) {
-      setSelected({ ...selected, ...patch });
-    }
+    if (openTask?.id === id) setOpenTask({ ...openTask, ...patch });
     try {
       await updateTask(id, patch);
+      // Recurring auto-generation when marked complete
+      if (
+        patch.status === "complete" &&
+        previous &&
+        previous.status !== "complete" &&
+        previous.recurring &&
+        previous.recurring_frequency &&
+        previous.due_date
+      ) {
+        const nextDue = nextRecurringDate(
+          previous.due_date,
+          previous.recurring_frequency,
+        );
+        if (
+          !previous.recurring_end_date ||
+          nextDue <= previous.recurring_end_date
+        ) {
+          const nextStart = previous.start_date
+            ? nextRecurringDate(
+                previous.start_date,
+                previous.recurring_frequency,
+              )
+            : null;
+          const created = await createTask(projectId, {
+            title: previous.title,
+            description: previous.description ?? undefined,
+            task_type: previous.task_type,
+            priority: previous.priority,
+            due_date: nextDue,
+            start_date: nextStart ?? undefined,
+            recurring: true,
+            recurring_frequency: previous.recurring_frequency,
+            recurring_end_date: previous.recurring_end_date ?? undefined,
+            parent_task_id: previous.parent_task_id ?? previous.id,
+            linked_module: previous.linked_module ?? undefined,
+            linked_record_id: previous.linked_record_id ?? undefined,
+          });
+          setTasks((rows) => [created, ...rows]);
+        }
+      }
     } catch (err) {
       setTasks(prev);
       setError(err instanceof Error ? err.message : "Failed to save task");
     }
   }
 
-  async function handleDelete(task: Task) {
+  async function handleDeleteTask(id: string) {
+    if (!window.confirm("Delete this task?")) return;
     const prev = tasks;
-    setTasks((rows) => rows.filter((t) => t.id !== task.id));
-    if (selected?.id === task.id) setSelected(null);
+    setTasks((rows) => rows.filter((t) => t.id !== id));
+    if (openTask?.id === id) setOpenTask(null);
     try {
-      await deleteTask(task.id);
+      await deleteTask(id);
     } catch (err) {
       setTasks(prev);
       setError(err instanceof Error ? err.message : "Failed to delete task");
     }
   }
 
+  // ---- Assignees ----
+
+  async function handleAddAssignee(taskId: string, contactId: string) {
+    try {
+      const a = await addAssignee(taskId, contactId);
+      setAssignees((rows) => [...rows, a]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add assignee");
+    }
+  }
+  async function handleRemoveAssignee(id: string) {
+    const prev = assignees;
+    setAssignees((rows) => rows.filter((a) => a.id !== id));
+    try {
+      await removeAssignee(id);
+    } catch (err) {
+      setAssignees(prev);
+      setError(err instanceof Error ? err.message : "Failed to remove assignee");
+    }
+  }
+
+  // ---- Attachments ----
+
+  async function handleUploadAttachment(taskId: string, file: File) {
+    try {
+      const a = await uploadTaskAttachment(taskId, file);
+      setAttachments((rows) => [...rows, a]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    }
+  }
+  async function handleDeleteAttachment(id: string) {
+    const prev = attachments;
+    setAttachments((rows) => rows.filter((a) => a.id !== id));
+    try {
+      await deleteAttachment(id);
+    } catch (err) {
+      setAttachments(prev);
+      setError(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
+
+  // ---- Dependencies ----
+
+  async function handleAddDependency(taskId: string, predecessorId: string) {
+    try {
+      const d = await addDependency(taskId, predecessorId);
+      setDependencies((rows) => [...rows, d]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add dependency");
+    }
+  }
+  async function handleRemoveDependency(id: string) {
+    const prev = dependencies;
+    setDependencies((rows) => rows.filter((d) => d.id !== id));
+    try {
+      await removeDependency(id);
+    } catch (err) {
+      setDependencies(prev);
+      setError(
+        err instanceof Error ? err.message : "Failed to remove dependency",
+      );
+    }
+  }
+
+  // ---- Punch List Details ----
+
+  async function handleUpdatePunch(taskId: string, patch: PunchListPatch) {
+    try {
+      const updated = await upsertPunchListDetails(taskId, patch);
+      setPunchDetails((rows) => {
+        const idx = rows.findIndex((r) => r.task_id === taskId);
+        if (idx === -1) return [...rows, updated];
+        const copy = [...rows];
+        copy[idx] = updated;
+        return copy;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save details");
+    }
+  }
+
+  if (role === "super") {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <ListChecks className="h-6 w-6 text-blue-400" />
+          <h1 className="text-2xl font-semibold text-zinc-100">Tasks</h1>
+        </div>
+        <p className="text-sm text-zinc-500">
+          Tasks are mobile-only for the Super role.
+        </p>
+      </div>
+    );
+  }
+
+  // Punch list summary
+  const punchTasks = tasks.filter((t) => t.task_type === "punch_list");
+  const punchTotal = punchTasks.length;
+  const punchDone = punchTasks.filter((t) => t.status === "complete").length;
+  const punchRemaining = punchTotal - punchDone;
+  const punchPct = punchTotal === 0 ? 0 : Math.round((punchDone / punchTotal) * 100);
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <ListChecks className="h-6 w-6 text-blue-400" />
-        <h1 className="text-2xl font-semibold text-zinc-100">Tasks</h1>
+        <h1 className="text-2xl font-semibold text-zinc-100">
+          {punchMode ? "Punch List" : "Tasks"}
+        </h1>
+        <button
+          type="button"
+          onClick={() => setPunchMode((v) => !v)}
+          className={`ml-auto flex items-center gap-1 rounded-md border px-3 py-1.5 text-xs transition ${
+            punchMode
+              ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+              : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+          }`}
+        >
+          <ClipboardCheck className="h-3.5 w-3.5" />
+          {punchMode ? "Exit Punch List" : "Punch List Mode"}
+        </button>
+      </div>
+
+      {punchMode && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <SummaryStat label="Total" value={punchTotal} />
+          <SummaryStat label="Completed" value={punchDone} tone="emerald" />
+          <SummaryStat label="Remaining" value={punchRemaining} tone="amber" />
+          <SummaryStat label="% Complete" value={`${punchPct}%`} tone="blue" />
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex w-fit rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+          {(
+            [
+              ["list", "List", ListChecks],
+              ["board", "Board", Layout],
+              ["calendar", "Calendar", CalendarDays],
+            ] as const
+          ).map(([key, label, Icon]) => {
+            const active = key === view;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setView(key)}
+                className={`flex items-center gap-1.5 rounded px-3 py-1 text-xs transition ${
+                  active
+                    ? "bg-zinc-800 text-zinc-100"
+                    : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) =>
+            setStatusFilter(e.target.value as TaskStatus | "all")
+          }
+          className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+        >
+          <option value="all">All statuses</option>
+          {TASK_STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {TASK_STATUS_LABEL[s]}
+            </option>
+          ))}
+        </select>
+        {!punchMode && (
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as TaskType | "all")}
+            className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+          >
+            <option value="all">All types</option>
+            {TASK_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {TASK_TYPE_LABEL[t]}
+              </option>
+            ))}
+          </select>
+        )}
+        {editable && (
+          <button
+            type="button"
+            onClick={() => handleAddTask()}
+            className="ml-auto flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New task
+          </button>
+        )}
       </div>
 
       {!editable && (
@@ -222,363 +427,1101 @@ export function TasksModule({ projectId }: ModuleProps) {
         </p>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          {STATUS_VALUES.map((s) => (
-            <span key={s} className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${STATUS_DOT[s]}`} />
-              <span className="text-zinc-400">
-                {STATUS_LABEL[s]} ({counts[s] ?? 0})
-              </span>
-            </span>
-          ))}
-          {overdueCount > 0 && (
-            <span className="flex items-center gap-1.5 rounded-full bg-red-500/10 px-2 py-0.5 text-red-400">
-              <AlertTriangle className="h-3 w-3" />
-              {overdueCount} overdue
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowComplete((v) => !v)}
-            className={`rounded-md border px-3 py-1 text-xs transition ${
-              showComplete
-                ? "border-blue-500/40 bg-blue-600/10 text-blue-400"
-                : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            {showComplete ? "Hide completed" : "Show completed"}
-          </button>
-          {editable && (
-            <button
-              type="button"
-              onClick={handleAdd}
-              className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add task
-            </button>
-          )}
-        </div>
-      </div>
-
       {loading && <p className="text-sm text-zinc-500">Loading…</p>}
-      {error && <p className="text-sm text-red-400">Error: {error}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
 
-      {!loading && !error && (
-        <div
-          className={`grid gap-4 ${
-            showComplete ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3"
-          }`}
-        >
-          {visibleColumns.map((col) => {
-            const colTasks = tasks.filter((t) => t.status === col.key);
-            return (
-              <KanbanColumn
-                key={col.key}
-                status={col.key}
-                label={col.label}
-                count={colTasks.length}
-                tasks={colTasks}
-                subOptions={subOptions}
-                teamOptions={teamOptions}
-                onSelect={setSelected}
-              />
-            );
-          })}
-        </div>
+      {!loading && !error && view === "list" && (
+        <ListView
+          tasks={filtered}
+          assignees={assignees}
+          contacts={contacts}
+          dependencies={dependencies}
+          allTasks={tasks}
+          punchMode={punchMode}
+          punchDetails={punchDetails}
+          onOpen={setOpenTask}
+        />
       )}
 
-      {selected && (
-        <TaskModal
-          task={selected}
+      {!loading && !error && view === "board" && (
+        <BoardView
+          tasks={filtered}
           editable={editable}
-          subOptions={subOptions}
-          teamOptions={teamOptions}
-          onClose={() => setSelected(null)}
-          onUpdate={handleUpdate}
-          onDelete={handleDelete}
+          onUpdateStatus={(id, status) =>
+            handleUpdateTask(id, {
+              status,
+              completed_at: status === "complete" ? new Date().toISOString() : null,
+            })
+          }
+          onOpen={setOpenTask}
+        />
+      )}
+
+      {!loading && !error && view === "calendar" && (
+        <CalendarView
+          tasks={filtered}
+          cursor={calendarCursor}
+          setCursor={setCalendarCursor}
+          onOpen={setOpenTask}
+        />
+      )}
+
+      {openTask && (
+        <TaskDetail
+          task={openTask}
+          allTasks={tasks}
+          assignees={assignees.filter((a) => a.task_id === openTask.id)}
+          attachments={attachments.filter((a) => a.task_id === openTask.id)}
+          dependencies={dependencies.filter((d) => d.task_id === openTask.id)}
+          punchDetails={punchDetails.find((p) => p.task_id === openTask.id) ?? null}
+          contacts={contacts}
+          editable={editable}
+          onClose={() => setOpenTask(null)}
+          onUpdate={(patch) => handleUpdateTask(openTask.id, patch)}
+          onDelete={() => handleDeleteTask(openTask.id)}
+          onAddAssignee={(cid) => handleAddAssignee(openTask.id, cid)}
+          onRemoveAssignee={handleRemoveAssignee}
+          onUploadAttachment={(file) =>
+            handleUploadAttachment(openTask.id, file)
+          }
+          onDeleteAttachment={handleDeleteAttachment}
+          onAddDependency={(pid) => handleAddDependency(openTask.id, pid)}
+          onRemoveDependency={handleRemoveDependency}
+          onUpdatePunch={(patch) => handleUpdatePunch(openTask.id, patch)}
         />
       )}
     </div>
   );
 }
 
-function KanbanColumn({
-  status,
+function SummaryStat({
   label,
-  count,
-  tasks,
-  subOptions,
-  teamOptions,
-  onSelect,
+  value,
+  tone,
 }: {
-  status: TaskStatus;
   label: string;
-  count: number;
-  tasks: Task[];
-  subOptions: ProjectSubOption[];
-  teamOptions: ProjectTeamOption[];
-  onSelect: (task: Task) => void;
+  value: string | number;
+  tone?: "emerald" | "amber" | "blue";
 }) {
+  const toneClass =
+    tone === "emerald"
+      ? "text-emerald-300"
+      : tone === "amber"
+        ? "text-amber-300"
+        : tone === "blue"
+          ? "text-blue-300"
+          : "text-zinc-100";
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 px-1 text-xs uppercase tracking-wider text-zinc-500">
-        <span className={`h-2 w-2 rounded-full ${STATUS_DOT[status]}`} />
-        <span className={STATUS_TEXT[status]}>{label}</span>
-        <span className="text-zinc-600">({count})</span>
-      </div>
-      <div className="flex flex-col gap-2">
-        {tasks.length === 0 ? (
-          <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/30 p-3 text-center text-xs text-zinc-600">
-            No tasks
-          </div>
-        ) : (
-          tasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              subOptions={subOptions}
-              teamOptions={teamOptions}
-              onClick={() => onSelect(task)}
-            />
-          ))
-        )}
+    <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-3">
+      <div className={`text-2xl font-semibold ${toneClass}`}>{value}</div>
+      <div className="text-[11px] uppercase tracking-wider text-zinc-500">
+        {label}
       </div>
     </div>
   );
 }
 
-function TaskCard({
-  task,
-  subOptions,
-  teamOptions,
-  onClick,
+// ---------- List View ----------
+
+function ListView({
+  tasks,
+  assignees,
+  contacts,
+  dependencies,
+  allTasks,
+  punchMode,
+  punchDetails,
+  onOpen,
 }: {
-  task: Task;
-  subOptions: ProjectSubOption[];
-  teamOptions: ProjectTeamOption[];
-  onClick: () => void;
+  tasks: Task[];
+  assignees: TaskAssignee[];
+  contacts: ContactOption[];
+  dependencies: TaskDependency[];
+  allTasks: Task[];
+  punchMode: boolean;
+  punchDetails: PunchListDetails[];
+  onOpen: (t: Task) => void;
 }) {
-  const time = trackTime(task);
-  const subName = nameForSub(task.assigned_sub_id, subOptions);
-  const userName = nameForUser(task.assigned_user_id, teamOptions);
-  const dueColor = time.overdue
-    ? "text-red-400"
-    : time.dueSoon
-      ? "text-amber-400"
-      : "text-zinc-400";
+  const [punchGroupBy, setPunchGroupBy] = useState<"sub" | "location">("sub");
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-col gap-2 rounded-md border bg-zinc-900/60 p-3 text-left transition hover:bg-zinc-900 ${STATUS_BORDER[task.status]}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-medium text-zinc-100">{task.title}</span>
+  if (tasks.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/40 p-6 text-center text-sm text-zinc-500">
+        No tasks match the current filters.
       </div>
+    );
+  }
 
-      {task.description && (
-        <p className="line-clamp-2 text-xs text-zinc-400">{task.description}</p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-        {time.openLabel && (
-          <span className="text-zinc-500">{time.openLabel}</span>
-        )}
-        {time.dueLabel && (
-          <span className={`font-medium ${dueColor}`}>{time.dueLabel}</span>
-        )}
-      </div>
-
-      {(subName || userName) && (
-        <div className="flex flex-wrap gap-1.5">
-          {subName && (
-            <span className="rounded-full border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-[11px] text-zinc-300">
-              Sub: {subName}
-            </span>
-          )}
-          {userName && (
-            <span className="rounded-full border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-[11px] text-zinc-300">
-              {userName}
-            </span>
-          )}
+  function rowFor(t: Task) {
+    const ass = assignees
+      .filter((a) => a.task_id === t.id)
+      .map((a) => contacts.find((c) => c.id === a.contact_id)?.name ?? "?")
+      .filter(Boolean);
+    const overdue = isOverdue(t);
+    const atRisk = dependencies
+      .filter((d) => d.task_id === t.id)
+      .some((d) => {
+        const pred = allTasks.find((x) => x.id === d.predecessor_task_id);
+        if (!pred || pred.status === "complete") return false;
+        if (!t.due_date || !pred.due_date) return false;
+        return pred.due_date >= t.due_date;
+      });
+    const punch = punchDetails.find((p) => p.task_id === t.id);
+    const subName = punch?.responsible_sub_id
+      ? contacts.find((c) => c.id === punch.responsible_sub_id)?.name ?? null
+      : null;
+    return (
+      <button
+        key={t.id}
+        type="button"
+        onClick={() => onOpen(t)}
+        className="flex w-full items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+      >
+        <span
+          className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${TASK_STATUS_STYLE[t.status]}`}
+        >
+          {TASK_STATUS_LABEL[t.status]}
+        </span>
+        <span
+          className={`hidden shrink-0 items-center rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wider sm:inline-flex ${PRIORITY_STYLE[t.priority]}`}
+        >
+          {PRIORITY_LABEL[t.priority]}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div
+            className={`truncate text-sm ${
+              t.status === "complete"
+                ? "text-zinc-500 line-through"
+                : "text-zinc-100"
+            }`}
+          >
+            {t.title}
+            {t.recurring && (
+              <RotateCw className="ml-1 inline h-3 w-3 text-zinc-500" />
+            )}
+          </div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-zinc-500">
+            {t.due_date && <span>Due {fmtDate(t.due_date)}</span>}
+            {ass.length > 0 && <span>{ass.join(", ")}</span>}
+            {punch?.location && <span>📍 {punch.location}</span>}
+            {subName && <span>{subName}</span>}
+          </div>
         </div>
-      )}
-    </button>
+        {overdue && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300">
+            <AlertTriangle className="h-3 w-3" />
+            Overdue
+          </span>
+        )}
+        {atRisk && (
+          <span
+            title="A predecessor is not complete and may slip your due date"
+            className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            At risk
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  if (punchMode) {
+    const groups = new Map<string, Task[]>();
+    for (const t of tasks) {
+      const punch = punchDetails.find((p) => p.task_id === t.id);
+      const key =
+        punchGroupBy === "sub"
+          ? (punch?.responsible_sub_id
+              ? contacts.find((c) => c.id === punch.responsible_sub_id)?.name ??
+                "(unassigned)"
+              : "(unassigned)")
+          : punch?.location || "(no location)";
+      const arr = groups.get(key) ?? [];
+      arr.push(t);
+      groups.set(key, arr);
+    }
+    const ordered = Array.from(groups.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
+
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="inline-flex w-fit rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+          {(["sub", "location"] as const).map((g) => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setPunchGroupBy(g)}
+              className={`rounded px-3 py-1 text-xs transition ${
+                punchGroupBy === g
+                  ? "bg-zinc-800 text-zinc-100"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              By {g === "sub" ? "Sub" : "Location"}
+            </button>
+          ))}
+        </div>
+        {ordered.map(([key, items]) => (
+          <div
+            key={key}
+            className="rounded-md border border-zinc-800 bg-zinc-900/40 p-3"
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-zinc-200">{key}</h3>
+              <span className="text-xs text-zinc-500">
+                {items.filter((t) => t.status === "complete").length} of{" "}
+                {items.length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-1.5">{items.map(rowFor)}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return <div className="flex flex-col gap-1.5">{tasks.map(rowFor)}</div>;
+}
+
+// ---------- Board View ----------
+
+function BoardView({
+  tasks,
+  editable,
+  onUpdateStatus,
+  onOpen,
+}: {
+  tasks: Task[];
+  editable: boolean;
+  onUpdateStatus: (id: string, status: TaskStatus) => void;
+  onOpen: (t: Task) => void;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      {TASK_STATUSES.map((status) => {
+        const items = tasks.filter((t) => t.status === status);
+        return (
+          <div
+            key={status}
+            className="flex flex-col gap-2 rounded-md border border-zinc-800 bg-zinc-900/40 p-2"
+          >
+            <div className="flex items-center justify-between px-1">
+              <span
+                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${TASK_STATUS_STYLE[status]}`}
+              >
+                {TASK_STATUS_LABEL[status]}
+              </span>
+              <span className="text-xs text-zinc-500">{items.length}</span>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {items.length === 0 && (
+                <div className="rounded border border-dashed border-zinc-800 p-2 text-center text-[11px] text-zinc-600">
+                  Empty
+                </div>
+              )}
+              {items.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onOpen(t)}
+                  className="flex flex-col gap-1 rounded-md border border-zinc-800 bg-zinc-950/60 p-2 text-left transition hover:border-zinc-700 hover:bg-zinc-950"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span
+                      className={`text-xs ${
+                        t.status === "complete"
+                          ? "text-zinc-500 line-through"
+                          : "text-zinc-100"
+                      }`}
+                    >
+                      {t.title}
+                    </span>
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full border px-1.5 py-0 text-[9px] uppercase tracking-wider ${PRIORITY_STYLE[t.priority]}`}
+                    >
+                      {PRIORITY_LABEL[t.priority][0]}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                    {t.due_date && <span>{fmtDate(t.due_date)}</span>}
+                    {isOverdue(t) && (
+                      <span className="text-red-400">Overdue</span>
+                    )}
+                  </div>
+                  {editable && (
+                    <select
+                      value={t.status}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        onUpdateStatus(t.id, e.target.value as TaskStatus);
+                      }}
+                      className="mt-1 rounded border border-zinc-800 bg-zinc-900 px-1 py-0.5 text-[10px] text-zinc-300 outline-none focus:border-blue-500 [color-scheme:dark]"
+                    >
+                      {TASK_STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {TASK_STATUS_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
-function TaskModal({
-  task,
-  editable,
-  subOptions,
-  teamOptions,
-  onClose,
-  onUpdate,
-  onDelete,
-}: {
-  task: Task;
-  editable: boolean;
-  subOptions: ProjectSubOption[];
-  teamOptions: ProjectTeamOption[];
-  onClose: () => void;
-  onUpdate: (id: string, patch: TaskPatch) => Promise<void>;
-  onDelete: (task: Task) => Promise<void>;
-}) {
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description ?? "");
-  const time = trackTime(task);
+// ---------- Calendar View ----------
 
-  async function commitTitle() {
-    const next = title.trim();
-    if (next && next !== task.title) await onUpdate(task.id, { title: next });
-    else if (!next) setTitle(task.title);
+function CalendarView({
+  tasks,
+  cursor,
+  setCursor,
+  onOpen,
+}: {
+  tasks: Task[];
+  cursor: Date;
+  setCursor: (d: Date) => void;
+  onOpen: (t: Task) => void;
+}) {
+  const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+  const days: Date[] = [];
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(gridStart);
+    d.setDate(gridStart.getDate() + i);
+    days.push(d);
   }
 
-  async function commitDescription() {
-    const next = description;
-    const current = task.description ?? "";
-    if (next !== current) await onUpdate(task.id, { description: next || null });
+  function toISO(d: Date) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  const today = new Date();
+  const todayISO = toISO(today);
+
+  const byDate = new Map<string, Task[]>();
+  for (const t of tasks) {
+    if (!t.due_date) continue;
+    const arr = byDate.get(t.due_date) ?? [];
+    arr.push(t);
+    byDate.set(t.due_date, arr);
   }
 
   return (
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() =>
+            setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))
+          }
+          className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setCursor(new Date())}
+          className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-0.5 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))
+          }
+          className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+        <span className="ml-2 text-sm font-medium text-zinc-300">
+          {cursor.toLocaleDateString("en-US", {
+            month: "long",
+            year: "numeric",
+          })}
+        </span>
+      </div>
+      <div className="rounded-md border border-zinc-800 bg-zinc-900/40">
+        <div className="grid grid-cols-7 border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-500">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+            <div key={d} className="px-2 py-1.5 text-center font-medium">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 grid-rows-6">
+          {days.map((d) => {
+            const iso = toISO(d);
+            const inMonth = d.getMonth() === cursor.getMonth();
+            const isToday = iso === todayISO;
+            const dayTasks = byDate.get(iso) ?? [];
+            return (
+              <div
+                key={iso}
+                className={`min-h-24 border-b border-r border-zinc-800 p-1.5 ${
+                  inMonth ? "bg-transparent" : "bg-zinc-900/20"
+                }`}
+              >
+                <div
+                  className={`mb-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] ${
+                    isToday
+                      ? "bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40"
+                      : inMonth
+                        ? "text-zinc-300"
+                        : "text-zinc-600"
+                  }`}
+                >
+                  {d.getDate()}
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  {dayTasks.slice(0, 3).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => onOpen(t)}
+                      className={`truncate rounded px-1 py-0.5 text-left text-[10px] ${TASK_STATUS_STYLE[t.status]}`}
+                    >
+                      {t.title}
+                    </button>
+                  ))}
+                  {dayTasks.length > 3 && (
+                    <span className="text-[10px] text-zinc-500">
+                      +{dayTasks.length - 3} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Task Detail (slide-out) ----------
+
+function TaskDetail({
+  task,
+  allTasks,
+  assignees,
+  attachments,
+  dependencies,
+  punchDetails,
+  contacts,
+  editable,
+  onClose,
+  onUpdate,
+  onDelete,
+  onAddAssignee,
+  onRemoveAssignee,
+  onUploadAttachment,
+  onDeleteAttachment,
+  onAddDependency,
+  onRemoveDependency,
+  onUpdatePunch,
+}: {
+  task: Task;
+  allTasks: Task[];
+  assignees: TaskAssignee[];
+  attachments: TaskAttachment[];
+  dependencies: TaskDependency[];
+  punchDetails: PunchListDetails | null;
+  contacts: ContactOption[];
+  editable: boolean;
+  onClose: () => void;
+  onUpdate: (patch: TaskPatch) => Promise<void>;
+  onDelete: () => Promise<void>;
+  onAddAssignee: (contactId: string) => Promise<void>;
+  onRemoveAssignee: (id: string) => Promise<void>;
+  onUploadAttachment: (file: File) => Promise<void>;
+  onDeleteAttachment: (id: string) => Promise<void>;
+  onAddDependency: (predecessorId: string) => Promise<void>;
+  onRemoveDependency: (id: string) => Promise<void>;
+  onUpdatePunch: (patch: PunchListPatch) => Promise<void>;
+}) {
+  const [assigneePicker, setAssigneePicker] = useState("");
+  const [depPicker, setDepPicker] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const usedAssigneeIds = new Set(
+    assignees.map((a) => a.contact_id).filter(Boolean) as string[],
+  );
+  const otherTasks = allTasks.filter((t) => t.id !== task.id);
+  const usedDepIds = new Set(dependencies.map((d) => d.predecessor_task_id));
+
+  const subContacts = contacts.filter((c) => c.role_type === "subcontractor");
+
+  return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-50 flex items-stretch justify-end bg-black/40"
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-2xl flex-col gap-4 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-5"
+        className="flex h-full w-full max-w-xl flex-col overflow-y-auto border-l border-zinc-800 bg-zinc-950 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-2">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={commitTitle}
-            disabled={!editable}
-            className="flex-1 bg-transparent text-xl font-semibold text-zinc-100 outline-none disabled:opacity-60"
-          />
+        <div className="flex items-start justify-between gap-3 border-b border-zinc-800 px-5 py-4">
+          <div className="flex flex-1 items-start gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-blue-500/10 text-blue-400">
+              <ListChecks className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <input
+                type="text"
+                defaultValue={task.title}
+                disabled={!editable}
+                onBlur={(e) => {
+                  const v = e.target.value.trim() || "Untitled";
+                  if (v !== task.title) onUpdate({ title: v });
+                }}
+                className="w-full rounded-md border border-transparent bg-transparent px-1 py-0.5 text-base font-semibold text-zinc-100 outline-none focus:border-zinc-800 focus:bg-zinc-900 disabled:opacity-60"
+              />
+              <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-500">
+                <span>Created {fmtDate(task.created_at.slice(0, 10))}</span>
+                {task.parent_task_id && (
+                  <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-1.5 py-0 text-[10px] uppercase tracking-wider text-violet-300">
+                    Recurring instance
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
-            aria-label="Close"
+            className="rounded-md p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 text-xs">
-          {time.openLabel && (
-            <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
-              {time.openLabel}
-            </span>
-          )}
-          {time.dueLabel && (
-            <span
-              className={`rounded-full px-2 py-0.5 ${
-                time.overdue
-                  ? "bg-red-500/10 text-red-400"
-                  : time.dueSoon
-                    ? "bg-amber-500/10 text-amber-400"
-                    : "bg-zinc-800 text-zinc-300"
-              }`}
-            >
-              {time.dueLabel}
-            </span>
-          )}
-          <span className="text-zinc-500">
-            Created {fmtDate(task.created_at.slice(0, 10))}
-          </span>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Status">
-            <StatusSelect
-              value={task.status}
-              editable={editable}
-              onChange={(s) => onUpdate(task.id, { status: s })}
-            />
-          </Field>
-          <Field label="Sub">
-            <SimpleSelect
-              value={task.assigned_sub_id}
-              editable={editable}
-              options={subOptions.map((s) => ({ value: s.id, label: s.name }))}
-              onChange={(v) => onUpdate(task.id, { assigned_sub_id: v })}
-              emptyLabel="— Unassigned —"
-              fallback="No subs on project"
-            />
-          </Field>
-          <Field label="Team member">
-            <SimpleSelect
-              value={task.assigned_user_id}
-              editable={editable}
-              options={teamOptions.map((m) => ({
-                value: m.user_id,
-                label: m.name,
-              }))}
-              onChange={(v) => onUpdate(task.id, { assigned_user_id: v })}
-              emptyLabel="— Unassigned —"
-              fallback="No team on project"
-            />
-          </Field>
-          <Field label="Start date">
-            <DateInput
-              value={task.start_date}
-              editable={editable}
-              onChange={(v) => onUpdate(task.id, { start_date: v })}
-            />
-          </Field>
-          <Field label="Due date">
-            <DateInput
-              value={task.due_date}
-              editable={editable}
-              onChange={(v) => onUpdate(task.id, { due_date: v })}
-            />
-          </Field>
-        </div>
-
-        <Field label="Description">
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={commitDescription}
-            disabled={!editable}
-            rows={4}
-            className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
-          />
-        </Field>
-
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            disabled
-            className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-500"
-            title="Coming soon"
-          >
-            <Mail className="h-3.5 w-3.5" />
-            Send status update request
-          </button>
-          {editable && (
-            <button
-              type="button"
-              onClick={async () => {
-                if (window.confirm("Delete this task?")) {
-                  await onDelete(task);
+        <div className="flex flex-col gap-4 px-5 py-4">
+          {/* Status / Type / Priority */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Status">
+              <select
+                value={task.status}
+                disabled={!editable}
+                onChange={(e) => {
+                  const status = e.target.value as TaskStatus;
+                  onUpdate({
+                    status,
+                    completed_at:
+                      status === "complete" ? new Date().toISOString() : null,
+                  });
+                }}
+                className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+              >
+                {TASK_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {TASK_STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Type">
+              <select
+                value={task.task_type}
+                disabled={!editable}
+                onChange={(e) =>
+                  onUpdate({ task_type: e.target.value as TaskType })
                 }
+                className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+              >
+                {TASK_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {TASK_TYPE_LABEL[t]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Priority">
+              <select
+                value={task.priority}
+                disabled={!editable}
+                onChange={(e) =>
+                  onUpdate({ priority: e.target.value as Priority })
+                }
+                className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {PRIORITY_LABEL[p]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          {/* Dates */}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Start date">
+              <input
+                type="date"
+                value={task.start_date ?? ""}
+                disabled={!editable}
+                onChange={(e) =>
+                  onUpdate({
+                    start_date: e.target.value === "" ? null : e.target.value,
+                  })
+                }
+                className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+              />
+            </Field>
+            <Field label="Due date">
+              <input
+                type="date"
+                value={task.due_date ?? ""}
+                disabled={!editable}
+                onChange={(e) =>
+                  onUpdate({
+                    due_date: e.target.value === "" ? null : e.target.value,
+                  })
+                }
+                className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+              />
+            </Field>
+          </div>
+
+          {/* Description */}
+          <Field label="Description / notes" wide>
+            <textarea
+              defaultValue={task.description ?? ""}
+              disabled={!editable}
+              rows={3}
+              onBlur={(e) => {
+                const v = e.target.value;
+                if (v !== (task.description ?? ""))
+                  onUpdate({ description: v || null });
               }}
-              className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-red-500/40 hover:text-red-400"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </button>
+              className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+            />
+          </Field>
+
+          {/* Assignees */}
+          <div className="border-t border-zinc-800 pt-4">
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-400">
+              Assignees
+            </h3>
+            <div className="mb-2 flex flex-wrap gap-2">
+              {assignees.length === 0 && (
+                <span className="text-xs text-zinc-500">No assignees yet.</span>
+              )}
+              {assignees.map((a) => {
+                const c = contacts.find((x) => x.id === a.contact_id);
+                return (
+                  <span
+                    key={a.id}
+                    className="flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-xs text-zinc-200"
+                  >
+                    {c?.name ?? "Unknown"}
+                    {editable && (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveAssignee(a.id)}
+                        className="text-zinc-500 hover:text-red-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+            {editable && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={assigneePicker}
+                  onChange={(e) => setAssigneePicker(e.target.value)}
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+                >
+                  <option value="">Add from contacts…</option>
+                  {contacts
+                    .filter((c) => !usedAssigneeIds.has(c.id))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!assigneePicker}
+                  onClick={async () => {
+                    await onAddAssignee(assigneePicker);
+                    setAssigneePicker("");
+                  }}
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+                >
+                  Add
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Recurring */}
+          <div className="border-t border-zinc-800 pt-4">
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-400">
+              Recurring
+            </h3>
+            <label className="mb-2 flex items-center gap-2 text-xs text-zinc-300">
+              <input
+                type="checkbox"
+                checked={task.recurring}
+                disabled={!editable}
+                onChange={(e) =>
+                  onUpdate({
+                    recurring: e.target.checked,
+                    recurring_frequency: e.target.checked
+                      ? task.recurring_frequency ?? "weekly"
+                      : null,
+                  })
+                }
+                className="h-4 w-4 cursor-pointer rounded border-zinc-700 bg-zinc-900 text-blue-500 [color-scheme:dark]"
+              />
+              Recurring task
+            </label>
+            {task.recurring && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Frequency">
+                  <select
+                    value={task.recurring_frequency ?? "weekly"}
+                    disabled={!editable}
+                    onChange={(e) =>
+                      onUpdate({
+                        recurring_frequency: e.target.value as RecurringFrequency,
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+                  >
+                    {RECURRING_FREQUENCIES.map((f) => (
+                      <option key={f} value={f}>
+                        {RECURRING_FREQUENCY_LABEL[f]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="End date (optional)">
+                  <input
+                    type="date"
+                    value={task.recurring_end_date ?? ""}
+                    disabled={!editable}
+                    onChange={(e) =>
+                      onUpdate({
+                        recurring_end_date:
+                          e.target.value === "" ? null : e.target.value,
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
+
+          {/* Soft dependencies */}
+          <div className="border-t border-zinc-800 pt-4">
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-400">
+              Predecessors
+            </h3>
+            <div className="mb-2 flex flex-col gap-1">
+              {dependencies.length === 0 && (
+                <span className="text-xs text-zinc-500">
+                  No predecessors. Add one to flag this task at risk if its
+                  predecessor slips.
+                </span>
+              )}
+              {dependencies.map((d) => {
+                const pred = allTasks.find(
+                  (t) => t.id === d.predecessor_task_id,
+                );
+                if (!pred) return null;
+                return (
+                  <div
+                    key={d.id}
+                    className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs"
+                  >
+                    <span className="flex-1 text-zinc-200">{pred.title}</span>
+                    <span
+                      className={`rounded-full border px-1.5 py-0 text-[10px] ${TASK_STATUS_STYLE[pred.status]}`}
+                    >
+                      {TASK_STATUS_LABEL[pred.status]}
+                    </span>
+                    {editable && (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveDependency(d.id)}
+                        className="text-zinc-500 hover:text-red-400"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {editable && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={depPicker}
+                  onChange={(e) => setDepPicker(e.target.value)}
+                  className="flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+                >
+                  <option value="">Pick a predecessor task…</option>
+                  {otherTasks
+                    .filter((t) => !usedDepIds.has(t.id))
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={!depPicker}
+                  onClick={async () => {
+                    await onAddDependency(depPicker);
+                    setDepPicker("");
+                  }}
+                  className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+                >
+                  Add
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Punch list details */}
+          {task.task_type === "punch_list" && (
+            <div className="border-t border-zinc-800 pt-4">
+              <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-400">
+                Punch list details
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Location" wide>
+                  <input
+                    type="text"
+                    defaultValue={punchDetails?.location ?? ""}
+                    disabled={!editable}
+                    placeholder="e.g. Lobby ceiling, Unit 402 bath"
+                    onBlur={(e) => {
+                      const v = e.target.value.trim();
+                      if (v !== (punchDetails?.location ?? ""))
+                        onUpdatePunch({ location: v || null });
+                    }}
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                  />
+                </Field>
+                <Field label="Responsible sub">
+                  <select
+                    value={punchDetails?.responsible_sub_id ?? ""}
+                    disabled={!editable}
+                    onChange={(e) =>
+                      onUpdatePunch({
+                        responsible_sub_id:
+                          e.target.value === "" ? null : e.target.value,
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+                  >
+                    <option value="">— None —</option>
+                    {(subContacts.length > 0 ? subContacts : contacts).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Sign-off required">
+                  <label className="flex items-center gap-2 text-sm text-zinc-200">
+                    <input
+                      type="checkbox"
+                      checked={!!punchDetails?.sign_off_required}
+                      disabled={!editable}
+                      onChange={(e) =>
+                        onUpdatePunch({ sign_off_required: e.target.checked })
+                      }
+                      className="h-4 w-4 cursor-pointer rounded border-zinc-700 bg-zinc-900 text-blue-500 [color-scheme:dark]"
+                    />
+                    Yes
+                  </label>
+                </Field>
+                <Field label="Sign-off date">
+                  <input
+                    type="date"
+                    value={punchDetails?.sign_off_date ?? ""}
+                    disabled={!editable}
+                    onChange={(e) =>
+                      onUpdatePunch({
+                        sign_off_date:
+                          e.target.value === "" ? null : e.target.value,
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+                  />
+                </Field>
+                <Field label="Sign-off by" wide>
+                  <select
+                    value={punchDetails?.sign_off_by ?? ""}
+                    disabled={!editable}
+                    onChange={(e) =>
+                      onUpdatePunch({
+                        sign_off_by: e.target.value === "" ? null : e.target.value,
+                      })
+                    }
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 [color-scheme:dark]"
+                  >
+                    <option value="">— None —</option>
+                    {contacts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            </div>
           )}
+
+          {/* Attachments */}
+          <div className="border-t border-zinc-800 pt-4">
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-400">
+              Attachments
+            </h3>
+            <div className="mb-2 flex flex-col gap-1">
+              {attachments.length === 0 && (
+                <span className="text-xs text-zinc-500">No files yet.</span>
+              )}
+              {attachments.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs"
+                >
+                  <Paperclip className="h-3 w-3 text-zinc-500" />
+                  <a
+                    href={a.file_url ?? "#"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 truncate text-blue-300 hover:underline"
+                  >
+                    {a.file_name ?? "file"}
+                  </a>
+                  {editable && (
+                    <button
+                      type="button"
+                      onClick={() => onDeleteAttachment(a.id)}
+                      className="text-zinc-500 hover:text-red-400"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {editable && (
+              <label
+                className={`flex w-fit cursor-pointer items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs transition hover:border-blue-500 hover:text-blue-400 ${
+                  uploading ? "opacity-60" : "text-zinc-300"
+                }`}
+              >
+                {uploading ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Upload className="h-3 w-3" />
+                )}
+                Add file
+                <input
+                  ref={fileRef}
+                  type="file"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    setUploading(true);
+                    try {
+                      await onUploadAttachment(f);
+                    } finally {
+                      setUploading(false);
+                      if (fileRef.current) fileRef.current.value = "";
+                    }
+                  }}
+                />
+              </label>
+            )}
+          </div>
+
+          {/* Linked module record (read-only display + free edit) */}
+          <div className="border-t border-zinc-800 pt-4">
+            <h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-400">
+              Linked record
+            </h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Module">
+                <input
+                  type="text"
+                  defaultValue={task.linked_module ?? ""}
+                  disabled={!editable}
+                  placeholder="e.g. permits, rfis"
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v !== (task.linked_module ?? ""))
+                      onUpdate({ linked_module: v || null });
+                  }}
+                  className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                />
+              </Field>
+              <Field label="Record ID">
+                <input
+                  type="text"
+                  defaultValue={task.linked_record_id ?? ""}
+                  disabled={!editable}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim();
+                    if (v !== (task.linked_record_id ?? ""))
+                      onUpdate({ linked_record_id: v || null });
+                  }}
+                  className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                />
+              </Field>
+            </div>
+            {task.task_type === "action_item" && task.linked_module === "meetings" && (
+              <p className="mt-2 text-[11px] text-zinc-600">
+                Originated from a Notes meeting action item.
+              </p>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="mt-2 flex items-center justify-between border-t border-zinc-800 pt-3">
+            {task.recurring && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] text-violet-300">
+                <RotateCw className="h-3 w-3" />
+                Auto-creates next instance on complete
+              </span>
+            )}
+            {editable && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await onDelete();
+                  onClose();
+                }}
+                className="ml-auto rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1 text-xs text-red-300 hover:bg-red-500/20"
+              >
+                Delete task
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -587,13 +1530,19 @@ function TaskModal({
 
 function Field({
   label,
+  wide,
   children,
 }: {
   label: string;
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-xs uppercase tracking-wider text-zinc-500">
+    <label
+      className={`flex flex-col gap-1 text-[11px] uppercase tracking-wider text-zinc-500 ${
+        wide ? "sm:col-span-2" : ""
+      }`}
+    >
       {label}
       <div className="text-sm normal-case tracking-normal text-zinc-200">
         {children}
@@ -602,107 +1551,45 @@ function Field({
   );
 }
 
-function StatusSelect({
-  value,
-  editable,
-  onChange,
-}: {
-  value: TaskStatus;
-  editable: boolean;
-  onChange: (next: TaskStatus) => void;
-}) {
-  if (!editable) {
-    return (
-      <span className="inline-flex items-center gap-1.5">
-        <span className={`h-2 w-2 rounded-full ${STATUS_DOT[value]}`} />
-        <span className={STATUS_TEXT[value]}>{STATUS_LABEL[value]}</span>
-      </span>
-    );
+// ---------- Background alert checks ----------
+
+async function scanForAtRiskTasks(
+  projectId: string,
+  tasks: Task[],
+  deps: TaskDependency[],
+): Promise<void> {
+  // task_at_risk: a task with a predecessor that's not complete and whose
+  // predecessor due_date is on or after the dependent's due_date.
+  for (const dep of deps) {
+    const t = tasks.find((x) => x.id === dep.task_id);
+    const pred = tasks.find((x) => x.id === dep.predecessor_task_id);
+    if (!t || !pred) continue;
+    if (pred.status === "complete") continue;
+    if (!t.due_date || !pred.due_date) continue;
+    if (pred.due_date >= t.due_date) {
+      try {
+        await postAlert(
+          projectId,
+          "task_at_risk",
+          `Task "${t.title}" at risk — predecessor "${pred.title}" not yet complete (due ${pred.due_date})`,
+        );
+      } catch {
+        /* ignore */
+      }
+    }
   }
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className={`h-2 w-2 rounded-full ${STATUS_DOT[value]}`} />
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as TaskStatus)}
-        className={`cursor-pointer appearance-none rounded bg-transparent px-1 py-0.5 text-sm outline-none transition hover:bg-zinc-800/60 focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500 ${STATUS_TEXT[value]}`}
-      >
-        {STATUS_VALUES.map((s) => (
-          <option key={s} value={s} className="bg-zinc-900 text-zinc-100">
-            {STATUS_LABEL[s]}
-          </option>
-        ))}
-      </select>
-    </span>
-  );
+  // task_overdue: tasks past due_date and not complete/cancelled
+  for (const t of tasks) {
+    if (!isOverdue(t)) continue;
+    try {
+      await postAlert(
+        projectId,
+        "task_overdue",
+        `Task "${t.title}" overdue (was due ${t.due_date})`,
+      );
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
-function SimpleSelect({
-  value,
-  editable,
-  options,
-  onChange,
-  emptyLabel,
-  fallback,
-}: {
-  value: string | null;
-  editable: boolean;
-  options: { value: string; label: string }[];
-  onChange: (next: string | null) => void;
-  emptyLabel: string;
-  fallback: string;
-}) {
-  if (!editable) {
-    const match = options.find((o) => o.value === value);
-    return (
-      <span className="text-zinc-300">
-        {match?.label ?? <span className="text-zinc-500">—</span>}
-      </span>
-    );
-  }
-  if (options.length === 0) {
-    return <span className="text-xs italic text-zinc-600">{fallback}</span>;
-  }
-  return (
-    <select
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
-      className="cursor-pointer rounded bg-transparent px-1 py-0.5 text-sm text-zinc-200 outline-none transition hover:bg-zinc-800/60 focus:bg-zinc-800 focus:ring-1 focus:ring-blue-500"
-    >
-      <option value="" className="bg-zinc-900 text-zinc-400">
-        {emptyLabel}
-      </option>
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value} className="bg-zinc-900 text-zinc-100">
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function DateInput({
-  value,
-  editable,
-  onChange,
-}: {
-  value: string | null;
-  editable: boolean;
-  onChange: (next: string | null) => void;
-}) {
-  if (!editable) {
-    return <span className="text-zinc-300">{fmtDate(value)}</span>;
-  }
-  return (
-    <input
-      type="date"
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value || null)}
-      className="rounded bg-transparent px-1 py-0.5 text-sm text-zinc-300 outline-none transition hover:bg-zinc-800/60 focus:bg-zinc-800 focus:text-zinc-200 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
-    />
-  );
-}
-
-// Suppress unused import warning — Calendar/UserIcon kept for future use.
-void Calendar;
-void UserIcon;
