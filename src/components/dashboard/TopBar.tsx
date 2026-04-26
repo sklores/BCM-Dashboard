@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, MapPin } from "lucide-react";
+import { ChevronDown, MapPin, Settings } from "lucide-react";
 import { useState } from "react";
 
 export type Project = {
@@ -13,9 +13,15 @@ type Props = {
   projects: Project[];
   activeProjectId: string;
   onProjectChange: (id: string) => void;
+  onOpenSettings?: () => void;
 };
 
-export function TopBar({ projects, activeProjectId, onProjectChange }: Props) {
+export function TopBar({
+  projects,
+  activeProjectId,
+  onProjectChange,
+  onOpenSettings,
+}: Props) {
   const [open, setOpen] = useState(false);
   const active = projects.find((p) => p.id === activeProjectId) ?? projects[0];
 
@@ -80,6 +86,17 @@ export function TopBar({ projects, activeProjectId, onProjectChange }: Props) {
           </>
         )}
       </div>
+      {onOpenSettings && (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="ml-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200"
+          aria-label="Settings"
+          title="Settings"
+        >
+          <Settings className="h-4 w-4" />
+        </button>
+      )}
     </header>
   );
 }

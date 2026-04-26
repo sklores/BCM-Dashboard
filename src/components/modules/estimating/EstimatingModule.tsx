@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Calculator, Download, Plus, Trash2, X } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
+import { BidSolicitationModule } from "@/components/modules/bid-solicitation/BidSolicitationModule";
 import {
   STATUS_LABEL,
   STATUS_TEXT,
@@ -25,6 +26,8 @@ import {
   type EstimatePatch,
   type LineItemPatch,
 } from "./queries";
+
+type Section = "estimates" | "bids";
 
 const STATUS_OPTIONS: EstimateStatus[] = [
   "draft",
@@ -59,9 +62,10 @@ function calcTotals(
   return { subtotal, fee, grand: subtotal + fee };
 }
 
-export function EstimatingModule(_props: ModuleProps) {
+export function EstimatingModule(props: ModuleProps) {
   const role = useRole();
   const editable = canEdit(role);
+  const [section, setSection] = useState<Section>("estimates");
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,20 +160,57 @@ export function EstimatingModule(_props: ModuleProps) {
         <h1 className="text-2xl font-semibold text-zinc-100">Estimating</h1>
       </div>
 
-      <p className="text-sm text-zinc-400">
-        Pre-construction estimates. Standalone — not tied to any active project.
-      </p>
+      <div className="inline-flex w-fit rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+        {(
+          [
+            ["estimates", "Estimates"],
+            ["bids", "Bid Solicitation"],
+          ] as const
+        ).map(([key, label]) => {
+          const active = key === section;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSection(key)}
+              className={`rounded px-4 py-1.5 text-sm transition ${
+                active
+                  ? "bg-zinc-800 text-zinc-100"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
-      {!editable && (
-        <p className="text-xs text-zinc-500">
-          View only — your role ({role}) cannot edit estimates.
-        </p>
+      {section === "bids" && (
+        <BidSolicitationModule
+          projectId={props.projectId}
+          moduleKey="bids"
+          moduleLabel="Bid Solicitation"
+          hideHeader
+        />
       )}
 
-      {loading && <p className="text-sm text-zinc-500">Loading…</p>}
-      {error && <p className="text-sm text-red-400">Error: {error}</p>}
+      {section === "estimates" && (
+        <>
+          <p className="text-sm text-zinc-400">
+            Pre-construction estimates. Standalone — not tied to any active
+            project.
+          </p>
 
-      {!loading && !error && (
+          {!editable && (
+            <p className="text-xs text-zinc-500">
+              View only — your role ({role}) cannot edit estimates.
+            </p>
+          )}
+
+          {loading && <p className="text-sm text-zinc-500">Loading…</p>}
+          {error && <p className="text-sm text-red-400">Error: {error}</p>}
+
+          {!loading && !error && (
         <>
           <div className="overflow-x-auto rounded-md border border-zinc-800">
             <table className="w-full min-w-[820px] text-sm">
@@ -251,17 +292,19 @@ export function EstimatingModule(_props: ModuleProps) {
               New estimate
             </button>
           )}
-        </>
-      )}
+            </>
+          )}
 
-      {selected && (
-        <EstimateDetailModal
-          estimate={selected}
-          editable={editable}
-          onClose={() => setSelected(null)}
-          onUpdate={handleUpdate}
-          onTotalChange={handleTotalChange}
-        />
+          {selected && (
+            <EstimateDetailModal
+              estimate={selected}
+              editable={editable}
+              onClose={() => setSelected(null)}
+              onUpdate={handleUpdate}
+              onTotalChange={handleTotalChange}
+            />
+          )}
+        </>
       )}
     </div>
   );

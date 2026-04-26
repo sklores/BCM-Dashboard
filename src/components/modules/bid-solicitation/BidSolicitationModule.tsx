@@ -51,7 +51,10 @@ function fmtDate(s: string | null): string {
   });
 }
 
-export function BidSolicitationModule({ projectId }: ModuleProps) {
+export function BidSolicitationModule({
+  projectId,
+  hideHeader = false,
+}: ModuleProps & { hideHeader?: boolean }) {
   const role = useRole();
   const editable = canEdit(role);
   const [requests, setRequests] = useState<BidRequest[]>([]);
@@ -123,10 +126,12 @@ export function BidSolicitationModule({ projectId }: ModuleProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <Gavel className="h-6 w-6 text-blue-400" />
-        <h1 className="text-2xl font-semibold text-zinc-100">Bid Solicitation</h1>
-      </div>
+      {!hideHeader && (
+        <div className="flex items-center gap-3">
+          <Gavel className="h-6 w-6 text-blue-400" />
+          <h1 className="text-2xl font-semibold text-zinc-100">Bid Solicitation</h1>
+        </div>
+      )}
 
       {!editable && (
         <p className="text-xs text-zinc-500">

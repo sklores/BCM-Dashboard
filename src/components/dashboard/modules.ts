@@ -15,7 +15,6 @@ import {
   Building2,
   Inbox,
   Calculator,
-  Gavel,
   FileSignature,
   type LucideIcon,
 } from "lucide-react";
@@ -27,7 +26,6 @@ import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
 import { TasksModule } from "@/components/modules/tasks/TasksModule";
 import { EstimatingModule } from "@/components/modules/estimating/EstimatingModule";
-import { BidSolicitationModule } from "@/components/modules/bid-solicitation/BidSolicitationModule";
 import { ContractsModule } from "@/components/modules/contracts/ContractsModule";
 import { ProposalsModule } from "@/components/modules/proposals/ProposalsModule";
 import { PlansModule } from "@/components/modules/plans/PlansModule";
@@ -62,7 +60,6 @@ export const modules: ModuleDef[] = [
   { key: "calendar",  label: "Calendar",  icon: CalendarDays, Component: PlaceholderModule },
   { key: "client",       label: "Client",          icon: Building2,      Component: PlaceholderModule       },
   { key: "estimating",   label: "Estimating",      icon: Calculator,     Component: EstimatingModule        },
-  { key: "bids",         label: "Bid Solicitation", icon: Gavel,         Component: BidSolicitationModule   },
   { key: "contracts",    label: "Contracts",       icon: FileSignature,  Component: ContractsModule         },
   { key: "proposals",    label: "Proposals",       icon: FileText,       Component: ProposalsModule         },
 ];
