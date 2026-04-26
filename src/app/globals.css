@@ -51,16 +51,21 @@ html.bcm-light body {
   color: var(--bcm-text);
 }
 
-/* --- Backgrounds: every zinc-* background is white. No grays anywhere
-       in the light theme. Sidebar / top bar are re-overridden below. --- */
-html.bcm-light .bg-zinc-950,
-html.bcm-light [class*="bg-zinc-950/"],
-html.bcm-light .bg-zinc-900,
-html.bcm-light [class*="bg-zinc-900/"],
-html.bcm-light .bg-zinc-800,
-html.bcm-light [class*="bg-zinc-800/"],
-html.bcm-light .bg-zinc-700,
-html.bcm-light [class*="bg-zinc-700/"] {
+/* --- Backgrounds: every zinc-* base class becomes white. Anchored so
+       hover:/focus:/group-hover: variants are NOT matched (those should
+       only apply on their pseudo-state, not always). --- */
+html.bcm-light [class~="bg-zinc-950"],
+html.bcm-light [class^="bg-zinc-950/"],
+html.bcm-light [class*=" bg-zinc-950/"],
+html.bcm-light [class~="bg-zinc-900"],
+html.bcm-light [class^="bg-zinc-900/"],
+html.bcm-light [class*=" bg-zinc-900/"],
+html.bcm-light [class~="bg-zinc-800"],
+html.bcm-light [class^="bg-zinc-800/"],
+html.bcm-light [class*=" bg-zinc-800/"],
+html.bcm-light [class~="bg-zinc-700"],
+html.bcm-light [class^="bg-zinc-700/"],
+html.bcm-light [class*=" bg-zinc-700/"] {
   background-color: #ffffff !important;
 }
 
@@ -99,11 +104,13 @@ html.bcm-light .divide-zinc-900 > :not([hidden]) ~ :not([hidden]) {
   border-color: var(--bcm-divider) !important;
 }
 
-/* --- Cards: clean 1px border, no shadow, no warm tint --- */
-html.bcm-light main.bcm-content .bg-zinc-900,
-html.bcm-light main.bcm-content [class*="bg-zinc-900/"],
-html.bcm-light main.bcm-content .bg-zinc-800,
-html.bcm-light main.bcm-content [class*="bg-zinc-800/"] {
+/* --- Cards: clean, no shadow, no warm tint --- */
+html.bcm-light main.bcm-content [class~="bg-zinc-900"],
+html.bcm-light main.bcm-content [class^="bg-zinc-900/"],
+html.bcm-light main.bcm-content [class*=" bg-zinc-900/"],
+html.bcm-light main.bcm-content [class~="bg-zinc-800"],
+html.bcm-light main.bcm-content [class^="bg-zinc-800/"],
+html.bcm-light main.bcm-content [class*=" bg-zinc-800/"] {
   background-color: #ffffff !important;
   box-shadow: none !important;
 }
