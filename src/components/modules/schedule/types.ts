@@ -13,6 +13,7 @@ export type SchedulePhase = {
   end_date: string | null;
   notes: string | null;
   sort_order: number;
+  is_milestone: boolean;
 };
 
 export type ScheduleTask = {

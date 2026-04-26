@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 const PHASE_COLUMNS =
-  "id, project_id, name, status, start_date, end_date, notes, sort_order";
+  "id, project_id, name, status, start_date, end_date, notes, sort_order, is_milestone";
 
 const TASK_COLUMNS =
   "id, phase_id, name, status, assigned_sub_id, assigned_user_id, start_date, end_date, notes, sort_order";
@@ -153,7 +153,10 @@ export async function fetchMaterialCatalog(
 }
 
 export type PhasePatch = Partial<
-  Pick<SchedulePhase, "name" | "status" | "start_date" | "end_date" | "notes">
+  Pick<
+    SchedulePhase,
+    "name" | "status" | "start_date" | "end_date" | "notes" | "is_milestone"
+  >
 >;
 
 export type TaskPatch = Partial<

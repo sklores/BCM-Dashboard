@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronRight,
   FileUp,
+  Flag,
   GripVertical,
   Package,
   Plus,
@@ -414,6 +415,29 @@ function SortablePhaseRow({
           <span className="text-xs font-normal text-zinc-500">
             ({taskCount})
           </span>
+          <label
+            className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
+              phase.is_milestone
+                ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                : "border-zinc-800 bg-zinc-900 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+            } ${editable ? "" : "cursor-default opacity-70"}`}
+            title="Show this phase in the Milestone view"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="checkbox"
+              checked={phase.is_milestone}
+              disabled={!editable}
+              onChange={(e) =>
+                handlers.onUpdatePhase(phase.id, {
+                  is_milestone: e.target.checked,
+                })
+              }
+              className="h-3 w-3 cursor-pointer rounded border-zinc-700 bg-zinc-900 text-amber-400 focus:ring-1 focus:ring-amber-500 focus:ring-offset-0 disabled:cursor-default [color-scheme:dark]"
+            />
+            <Flag className="h-3 w-3" />
+            Milestone
+          </label>
         </div>
       </td>
       <td className="px-3 py-2">
