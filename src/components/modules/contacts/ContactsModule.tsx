@@ -275,15 +275,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
       )}
 
       {categoryMissing && (
-        <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
-          Category buckets are turned off — apply{" "}
-          <code className="text-amber-200">
-            supabase/migrations/20260426000003_company_categories.sql
-          </code>{" "}
-          in Supabase to enable Bruno Clay Team / Contractors / Architect /
-          Engineer / MEPs / Client / Building grouping. The flat list below
-          still works in the meantime.
-        </div>
+        <CategorySetupBanner />
       )}
 
       {/* Toolbar */}
@@ -1020,5 +1012,37 @@ function Input({
       }}
       className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
     />
+  );
+}
+
+const CATEGORY_MIGRATION_SQL = `-- BCM Dashboard: enable Contacts category buckets
+alter table companies add column if not exists category text;
+create index if not exists companies_category_idx on companies (project_id, category);`;
+
+function CategorySetupBanner() {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(CATEGORY_MIGRATION_SQL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this SQL", CATEGORY_MIGRATION_SQL);
+    }
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-300">
+      <span className="flex-1 min-w-[260px]">
+        Category buckets are off until you run the schema migration in
+        Supabase. The flat list below works in the meantime.
+      </span>
+      <button
+        type="button"
+        onClick={copy}
+        className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200 hover:bg-amber-500/20"
+      >
+        {copied ? "Copied — paste in Supabase SQL" : "Copy migration SQL"}
+      </button>
+    </div>
   );
 }

@@ -57,6 +57,7 @@ export function JobsSection({
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [schemaMissing, setSchemaMissing] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -88,13 +89,8 @@ export function JobsSection({
       } catch (err) {
         if (!cancelled) {
           const msg = err instanceof Error ? err.message : "Failed to load jobs";
-          if (
-            msg.toLowerCase().includes("relation") &&
-            msg.toLowerCase().includes("does not exist")
-          ) {
-            setError(
-              "Jobs schema isn't set up yet. Apply the migration supabase/migrations/20260426000002_jobs.sql in Supabase, then reload.",
-            );
+          if (isMissingSchemaError(msg)) {
+            setSchemaMissing(true);
           } else {
             setError(msg);
           }
@@ -115,13 +111,8 @@ export function JobsSection({
       setExpanded((s) => new Set([...s, created.id]));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to add job";
-      if (
-        msg.toLowerCase().includes("relation") &&
-        msg.toLowerCase().includes("does not exist")
-      ) {
-        setError(
-          "Jobs schema isn't set up yet. Apply supabase/migrations/20260426000002_jobs.sql in Supabase, then reload.",
-        );
+      if (isMissingSchemaError(msg)) {
+        setSchemaMissing(true);
       } else {
         setError(msg);
       }
@@ -186,6 +177,10 @@ export function JobsSection({
         <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading jobs…
       </div>
     );
+
+  if (schemaMissing) {
+    return <JobsSetupBanner />;
+  }
 
   return (
     <div className="space-y-3">
@@ -660,6 +655,81 @@ function DrawingPicker({
           })}
         </ul>
       </div>
+    </div>
+  );
+}
+
+function isMissingSchemaError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return m.includes("relation") && m.includes("does not exist");
+}
+
+const JOBS_MIGRATION_SQL = `-- BCM Dashboard: Jobs feature (subcontractor scopes of work)
+create table if not exists jobs (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references projects(id) on delete cascade,
+  sub_id uuid references subs(id) on delete set null,
+  title text,
+  scope text,
+  status text not null default 'not_started',
+  start_date date,
+  end_date date,
+  notes text,
+  created_at timestamptz not null default now()
+);
+alter table jobs disable row level security;
+create index if not exists jobs_project_idx on jobs (project_id);
+create index if not exists jobs_sub_idx on jobs (sub_id);
+
+create table if not exists job_materials (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references jobs(id) on delete cascade,
+  material_id uuid not null references materials(id) on delete cascade,
+  unique (job_id, material_id)
+);
+alter table job_materials disable row level security;
+create index if not exists job_materials_job_idx on job_materials (job_id);
+
+create table if not exists job_drawings (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references jobs(id) on delete cascade,
+  drawing_id uuid references drawings(id) on delete cascade,
+  extraction_id uuid references drawing_extractions(id) on delete cascade,
+  unique (job_id, drawing_id, extraction_id),
+  check (drawing_id is not null or extraction_id is not null)
+);
+alter table job_drawings disable row level security;
+create index if not exists job_drawings_job_idx on job_drawings (job_id);`;
+
+function JobsSetupBanner() {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(JOBS_MIGRATION_SQL);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this SQL", JOBS_MIGRATION_SQL);
+    }
+  }
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-4">
+      <h3 className="text-sm font-semibold text-amber-300">
+        Jobs needs a one-time database setup
+      </h3>
+      <p className="mt-1 text-xs text-amber-200/80">
+        Click below to copy the schema, then paste &amp; run it in Supabase
+        (Project → SQL → New query). This adds the <code>jobs</code>,{" "}
+        <code>job_materials</code>, and <code>job_drawings</code> tables.
+        Reload this page after running.
+      </p>
+      <button
+        type="button"
+        onClick={copy}
+        className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-200 hover:bg-amber-500/20"
+      >
+        {copied ? "Copied — paste in Supabase SQL" : "Copy migration SQL"}
+      </button>
     </div>
   );
 }

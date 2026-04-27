@@ -127,6 +127,25 @@ export function PhotoAnnotator({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [strokes, drawing, cropRect]);
 
+  // Enter key triggers screenshot save while a crop is active. Escape cancels.
+  useEffect(() => {
+    if (tool !== "screenshot" || !cropRect || textPrompt) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const w = Math.abs(cropRect!.w);
+        const h = Math.abs(cropRect!.h);
+        if (w >= 8 && h >= 8) void handleSaveScreenshot();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setCropRect(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tool, cropRect, textPrompt]);
+
   function redrawOverlay() {
     const canvas = overlayCanvasRef.current;
     if (!canvas) return;
@@ -353,11 +372,16 @@ export function PhotoAnnotator({
       return;
     }
     if (cropRect && tool === "screenshot") {
-      // Drop tiny / accidental rectangles.
       const w = Math.abs(cropRect.w);
       const h = Math.abs(cropRect.h);
       if (w < 8 || h < 8) {
+        // Tiny / accidental drag — discard.
         setCropRect(null);
+      } else {
+        // Auto-save on release. The crop captures source pixels at native
+        // resolution; the parent's onSaved closes the editor and adds the
+        // new photo to the gallery.
+        void handleSaveScreenshot();
       }
       return;
     }
@@ -727,7 +751,7 @@ export function PhotoAnnotator({
               : tool === "arrow"
                 ? "Drag from base to tip"
                 : tool === "screenshot"
-                  ? "Drag to crop a region — saves as a new photo tagged screenshot"
+                  ? "Drag to crop — releases to save as a new tagged photo (Enter to confirm, Esc to cancel)"
                   : "Drag to draw a rectangle"}
         </div>
       </div>
