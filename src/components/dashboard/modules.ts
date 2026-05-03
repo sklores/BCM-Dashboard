@@ -1,40 +1,31 @@
 import type { ComponentType } from "react";
 import {
-  FileText,
-  Package,
-  Truck,
-  Users,
-  ListChecks,
-  Image as ImageIcon,
-  DollarSign,
   BarChart3,
+  FilePlus,
+  Image as ImageIcon,
+  Inbox,
+  ListChecks,
   Map,
+  Package,
   ScrollText,
   StickyNote,
-  CalendarDays,
-  Inbox,
-  Calculator,
-  FileSignature,
+  Truck,
+  Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
-import { SubsModule } from "@/components/modules/subs/SubsModule";
 import { ContactsModule } from "@/components/modules/contacts/ContactsModule";
-import { PermitsModule } from "@/components/modules/permits/PermitsModule";
-import { NotesModule } from "@/components/modules/notes/NotesModule";
-import { ReportsModule } from "@/components/modules/reports/ReportsModule";
-import { BudgetModule } from "@/components/modules/budget/BudgetModule";
-import { CalendarModule } from "@/components/modules/calendar/CalendarModule";
+import { CreateModule } from "@/components/modules/create/CreateModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
+import { NotesModule } from "@/components/modules/notes/NotesModule";
+import { PermitsModule } from "@/components/modules/permits/PermitsModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
-import { WorkModule } from "@/components/modules/work/WorkModule";
-import { EstimatingModule } from "@/components/modules/estimating/EstimatingModule";
 import { PlansModule } from "@/components/modules/plans/PlansModule";
-import { BillingModule } from "@/components/modules/billing/BillingModule";
-import { PaperworkModule } from "@/components/modules/paperwork/PaperworkModule";
-import { PlaceholderModule } from "@/components/modules/placeholder/PlaceholderModule";
+import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
+import { SubsModule } from "@/components/modules/subs/SubsModule";
+import { BudgetModule } from "@/components/modules/budget/BudgetModule";
+import { WorkModule } from "@/components/modules/work/WorkModule";
 
 export type ModuleProps = {
   projectId: string;
@@ -49,21 +40,24 @@ export type ModuleDef = {
   Component: ComponentType<ModuleProps>;
 };
 
+// 12-module target spec. Order is intentional.
+//   - Reports / Estimating / Paperwork / Calendar / Billing dropped from
+//     the sidebar (some of their tables remain in the DB for now).
+//   - "Contractors" sidebar label is now "Subs".
+//   - "Tasks" key is reused for the Work module so saved localStorage
+//     orderings keep working.
+//   - "Create" (#12) is currently a placeholder — built out in Phase H.
 export const modules: ModuleDef[] = [
-  { key: "reports",    label: "Reports",    icon: FileText,      Component: ReportsModule     },
-  { key: "estimating", label: "Estimating", icon: Calculator,    Component: EstimatingModule  },
-  { key: "paperwork",  label: "Paperwork",  icon: FileSignature, Component: PaperworkModule   },
-  { key: "materials",  label: "Materials",  icon: Package,       Component: MaterialsModule   },
-  { key: "subs",       label: "Contractors", icon: Truck,        Component: SubsModule        },
-  { key: "contacts",   label: "Contacts",   icon: Users,         Component: ContactsModule    },
-  { key: "tasks",      label: "Work",       icon: ListChecks,    Component: WorkModule        },
-  { key: "photos",     label: "Photos",     icon: ImageIcon,     Component: PhotosModule      },
-  { key: "budget",     label: "Budget",     icon: Wallet,        Component: BudgetModule      },
-  { key: "schedule",   label: "Schedule",   icon: BarChart3,     Component: ScheduleModule    },
-  { key: "plans",      label: "Plans",      icon: Map,           Component: PlansModule       },
-  { key: "permits",    label: "Permits",    icon: ScrollText,    Component: PermitsModule     },
-  { key: "notes",      label: "Notes",      icon: StickyNote,    Component: NotesModule       },
-  { key: "calendar",   label: "Calendar",   icon: CalendarDays,  Component: CalendarModule    },
-  { key: "messages",   label: "Messages",   icon: Inbox,         Component: MessagesModule    },
-  { key: "billing",    label: "Billing",    icon: DollarSign,    Component: BillingModule     },
+  { key: "contacts",  label: "Contacts",  icon: Users,       Component: ContactsModule  },
+  { key: "subs",      label: "Subs",      icon: Truck,       Component: SubsModule      },
+  { key: "materials", label: "Materials", icon: Package,     Component: MaterialsModule },
+  { key: "photos",    label: "Photos",    icon: ImageIcon,   Component: PhotosModule    },
+  { key: "notes",     label: "Notes",     icon: StickyNote,  Component: NotesModule     },
+  { key: "messages",  label: "Messages",  icon: Inbox,       Component: MessagesModule  },
+  { key: "schedule",  label: "Schedule",  icon: BarChart3,   Component: ScheduleModule  },
+  { key: "budget",    label: "Budget",    icon: Wallet,      Component: BudgetModule    },
+  { key: "plans",     label: "Plans",     icon: Map,         Component: PlansModule     },
+  { key: "permits",   label: "Permits",   icon: ScrollText,  Component: PermitsModule   },
+  { key: "tasks",     label: "Work",      icon: ListChecks,  Component: WorkModule      },
+  { key: "create",    label: "Create",    icon: FilePlus,    Component: CreateModule    },
 ];

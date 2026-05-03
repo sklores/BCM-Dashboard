@@ -353,15 +353,9 @@ export function TasksModule({ projectId }: ModuleProps) {
 
   if (role === "super") {
     return (
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <ListChecks className="h-6 w-6 text-blue-400" />
-          <h1 className="text-2xl font-semibold text-zinc-100">Tasks</h1>
-        </div>
-        <p className="text-sm text-zinc-500">
-          Tasks are mobile-only for the Super role.
-        </p>
-      </div>
+      <p className="text-sm text-zinc-500">
+        Tasks are mobile-only for the Super role.
+      </p>
     );
   }
 
@@ -381,10 +375,11 @@ export function TasksModule({ projectId }: ModuleProps) {
       }
     >
       <div className="flex flex-wrap items-center gap-3">
-        <ListChecks className="h-6 w-6 text-blue-400" />
-        <h1 className="text-2xl font-semibold text-zinc-100">
-          {punchMode ? "Punch List" : "Tasks"}
-        </h1>
+        {punchMode && (
+          <h2 className="text-base font-semibold text-amber-300">
+            Punch List
+          </h2>
+        )}
         <button
           type="button"
           onClick={toggleFullscreen}

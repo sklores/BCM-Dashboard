@@ -251,7 +251,7 @@ export function SubsModule({ projectId }: ModuleProps) {
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <Truck className="h-6 w-6 text-blue-400" />
-        <h1 className="text-2xl font-semibold text-zinc-100">Contractors</h1>
+        <h1 className="text-2xl font-semibold text-zinc-100">Subs</h1>
       </div>
 
       {!editable && (
