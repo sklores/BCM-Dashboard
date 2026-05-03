@@ -59,31 +59,34 @@ export const ROLE_TYPE_STYLE: Record<RoleType, string> = {
 
 export type CompanyCategory =
   | "bcm_team"
-  | "contractors"
-  | "architect"
-  | "engineer"
-  | "meps"
   | "client"
-  | "building";
+  | "design_team"
+  | "subs_trade"
+  | "subs_mep"
+  | "permits_inspections"
+  | "building"
+  | "vendors";
 
 export const COMPANY_CATEGORIES: CompanyCategory[] = [
   "bcm_team",
-  "contractors",
-  "architect",
-  "engineer",
-  "meps",
   "client",
+  "design_team",
+  "subs_trade",
+  "subs_mep",
+  "permits_inspections",
   "building",
+  "vendors",
 ];
 
 export const COMPANY_CATEGORY_LABEL: Record<CompanyCategory, string> = {
-  bcm_team: "Bruno Clay Team",
-  contractors: "Contractors",
-  architect: "Architect",
-  engineer: "Engineer",
-  meps: "MEPs",
+  bcm_team: "BCM Team",
   client: "Client",
+  design_team: "Design Team",
+  subs_trade: "Subs — Trade",
+  subs_mep: "Subs — MEP",
+  permits_inspections: "Permits & Inspections",
   building: "Building",
+  vendors: "Vendors",
 };
 
 export type Company = {
