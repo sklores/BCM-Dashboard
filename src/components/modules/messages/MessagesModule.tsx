@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  CheckSquare,
   ChevronDown,
   ChevronRight,
   Copy,
+  Flag,
   Inbox,
   Loader2,
   Mail,
+  Plus,
   Search,
   Sparkles,
   X,
@@ -15,11 +18,22 @@ import {
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
   aiTagMessage,
+  createFollowUpTaskFromMessage,
   fetchMessages,
   fetchProjectInboundEmail,
+  updateMessagePriority,
   updateMessageTags,
 } from "./queries";
-import { TAG_OPTIONS, type Message } from "./types";
+import {
+  ENTRY_TYPE_LABEL,
+  PRIORITY_LABEL,
+  PRIORITY_STYLE,
+  TAG_OPTIONS,
+  type EntryType,
+  type Message,
+  type Priority,
+} from "./types";
+import { MessagesComposer } from "./Composer";
 
 export function MessagesModule({ projectId }: ModuleProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,6 +50,9 @@ export function MessagesModule({ projectId }: ModuleProps) {
 
   const [copied, setCopied] = useState(false);
   const [tagging, setTagging] = useState<Set<string>>(new Set());
+  const [composing, setComposing] = useState(false);
+  const [priorityOnly, setPriorityOnly] = useState(false);
+  const [creatingTaskFor, setCreatingTaskFor] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +98,7 @@ export function MessagesModule({ projectId }: ModuleProps) {
     const fromMs = fromDate ? new Date(fromDate + "T00:00:00").getTime() : null;
     const toMs = toDate ? new Date(toDate + "T23:59:59").getTime() : null;
     return messages.filter((m) => {
+      if (priorityOnly && (m.priority === "normal" || !m.priority)) return false;
       if (activeTags.size > 0) {
         for (const t of activeTags) if (!m.tags.includes(t)) return false;
       }
@@ -93,7 +111,7 @@ export function MessagesModule({ projectId }: ModuleProps) {
       }
       return true;
     });
-  }, [messages, search, activeTags, fromDate, toDate]);
+  }, [messages, search, activeTags, fromDate, toDate, priorityOnly]);
 
   function toggleExpand(id: string) {
     setExpanded((prev) => {
@@ -129,6 +147,7 @@ export function MessagesModule({ projectId }: ModuleProps) {
     setActiveTags(new Set());
     setFromDate("");
     setToDate("");
+    setPriorityOnly(false);
   }
 
   async function handleAiTag(messageId: string) {
@@ -166,9 +185,42 @@ export function MessagesModule({ projectId }: ModuleProps) {
     }
   }
 
+  async function handleSetPriority(messageId: string, priority: Priority) {
+    const prev = messages;
+    setMessages((rows) =>
+      rows.map((m) => (m.id === messageId ? { ...m, priority } : m)),
+    );
+    try {
+      await updateMessagePriority(messageId, priority);
+    } catch (err) {
+      setMessages(prev);
+      setError(err instanceof Error ? err.message : "Failed to save priority");
+    }
+  }
+
+  async function handleFollowUp(message: Message) {
+    setCreatingTaskFor(message.id);
+    try {
+      const taskId = await createFollowUpTaskFromMessage(projectId, message);
+      setMessages((rows) =>
+        rows.map((m) =>
+          m.id === message.id ? { ...m, follow_up_task_id: taskId } : m,
+        ),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create task");
+    } finally {
+      setCreatingTaskFor(null);
+    }
+  }
+
   const untaggedCount = messages.filter((m) => m.tags.length === 0).length;
   const hasActiveFilters =
-    search !== "" || activeTags.size > 0 || fromDate !== "" || toDate !== "";
+    search !== "" ||
+    activeTags.size > 0 ||
+    fromDate !== "" ||
+    toDate !== "" ||
+    priorityOnly;
 
   return (
     <div className="flex flex-col gap-6">
@@ -204,6 +256,15 @@ export function MessagesModule({ projectId }: ModuleProps) {
                 {copied ? "Copied" : "Copy"}
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setComposing(true)}
+              className="flex items-center gap-1.5 rounded-md border border-blue-500/40 bg-blue-500/15 px-3 py-1.5 text-xs text-blue-300 transition hover:bg-blue-500/25"
+              title="Add a call log, field note, or text screenshot"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New entry
+            </button>
           </div>
 
           <p className="text-xs text-zinc-500">
@@ -239,6 +300,19 @@ export function MessagesModule({ projectId }: ModuleProps) {
               className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
               aria-label="To date"
             />
+            <button
+              type="button"
+              onClick={() => setPriorityOnly((v) => !v)}
+              className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs transition ${
+                priorityOnly
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                  : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200"
+              }`}
+              title="Show only High / Urgent priority"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              Priority only
+            </button>
             {hasActiveFilters && (
               <button
                 type="button"
@@ -301,14 +375,25 @@ export function MessagesModule({ projectId }: ModuleProps) {
                   message={m}
                   expanded={expanded.has(m.id)}
                   tagging={tagging.has(m.id)}
+                  creatingTask={creatingTaskFor === m.id}
                   onToggle={() => toggleExpand(m.id)}
                   onAiTag={() => handleAiTag(m.id)}
                   onSetTags={(tags) => handleSetTags(m.id, tags)}
+                  onSetPriority={(p) => handleSetPriority(m.id, p)}
+                  onFollowUp={() => handleFollowUp(m)}
                 />
               ))
             )}
           </div>
         </>
+      )}
+
+      {composing && (
+        <MessagesComposer
+          projectId={projectId}
+          onCreated={(m) => setMessages((rows) => [m, ...rows])}
+          onClose={() => setComposing(false)}
+        />
       )}
     </div>
   );
@@ -318,16 +403,22 @@ function MessageCard({
   message,
   expanded,
   tagging,
+  creatingTask,
   onToggle,
   onAiTag,
   onSetTags,
+  onSetPriority,
+  onFollowUp,
 }: {
   message: Message;
   expanded: boolean;
   tagging: boolean;
+  creatingTask: boolean;
   onToggle: () => void;
   onAiTag: () => void;
   onSetTags: (tags: string[]) => void;
+  onSetPriority: (p: Priority) => void;
+  onFollowUp: () => void;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -374,12 +465,26 @@ function MessageCard({
         </button>
         <div className="flex flex-1 flex-col gap-0.5">
           <div className="flex items-baseline justify-between gap-3">
-            <div className="text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span
+                className="inline-flex items-center rounded-full border border-zinc-800 bg-zinc-950 px-2 py-0.5 text-[10px] uppercase tracking-wider text-zinc-500"
+                title="Entry type"
+              >
+                {ENTRY_TYPE_LABEL[(message.entry_type ?? "email") as EntryType]}
+              </span>
+              {message.priority && message.priority !== "normal" && (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${PRIORITY_STYLE[message.priority]}`}
+                >
+                  <Flag className="h-2.5 w-2.5" />
+                  {PRIORITY_LABEL[message.priority]}
+                </span>
+              )}
               <span className="font-medium text-zinc-100">
                 {message.from_name || message.from_email || "Unknown sender"}
               </span>
               {message.from_email && message.from_name && (
-                <span className="ml-2 text-xs text-zinc-500">
+                <span className="text-xs text-zinc-500">
                   {message.from_email}
                 </span>
               )}
@@ -455,11 +560,42 @@ function MessageCard({
           </select>
         )}
 
+        <select
+          value={message.priority ?? "normal"}
+          onChange={(e) => onSetPriority(e.target.value as Priority)}
+          className="ml-auto rounded-full border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-400 outline-none focus:border-blue-500 [color-scheme:dark]"
+          title="Set priority"
+        >
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+        {message.follow_up_task_id ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">
+            <CheckSquare className="h-3 w-3" />
+            Task created
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onFollowUp}
+            disabled={creatingTask}
+            className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-400 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-50"
+            title="Create a Work → Task from this message"
+          >
+            {creatingTask ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <CheckSquare className="h-3 w-3" />
+            )}
+            Follow up
+          </button>
+        )}
         <button
           type="button"
           onClick={onAiTag}
           disabled={tagging}
-          className="ml-auto inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-400 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-full border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-[11px] text-zinc-400 transition hover:border-blue-500 hover:text-blue-400 disabled:opacity-50"
           title="Re-tag this message with Claude"
         >
           {tagging ? (
@@ -475,6 +611,20 @@ function MessageCard({
         <div className="ml-7 mt-2 whitespace-pre-wrap rounded bg-zinc-950 p-3 text-sm text-zinc-300">
           {message.body}
         </div>
+      )}
+      {expanded && message.attachment_url && (
+        <a
+          href={message.attachment_url}
+          target="_blank"
+          rel="noreferrer"
+          className="ml-7 mt-2 block w-fit overflow-hidden rounded border border-zinc-800 hover:border-blue-500/50"
+        >
+          <img
+            src={message.attachment_url}
+            alt="Attachment"
+            className="max-h-72 max-w-full"
+          />
+        </a>
       )}
     </div>
   );
