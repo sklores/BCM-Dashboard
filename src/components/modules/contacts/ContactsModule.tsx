@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
+  ChevronDown,
+  ChevronRight,
   Mail,
   Phone,
   Plus,
@@ -60,6 +62,44 @@ export function ContactsModule({ projectId }: ModuleProps) {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<RoleType | "all">("all");
   const [selection, setSelection] = useState<Selection>(null);
+  // Track which category sections are collapsed. Default all expanded.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function toggleCollapse(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // Map a contact's role_type to a company category bucket so new contacts
+  // land in the right section automatically.
+  function categoryForRole(role: RoleType | null): CompanyCategory | null {
+    switch (role) {
+      case "client":
+        return "client";
+      case "architect":
+        return "design_team";
+      case "subcontractor":
+        return "subs_trade";
+      case "mep":
+        return "subs_mep";
+      case "inspector":
+        return "permits_inspections";
+      case "supplier":
+        return "vendors";
+      case "owner":
+      case "pm":
+      case "apm":
+      case "super":
+      case "general_contractor":
+        return "bcm_team";
+      default:
+        return null;
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -195,6 +235,48 @@ export function ContactsModule({ projectId }: ModuleProps) {
     }
   }
 
+  // Toolbar "Add contact" — pick a role type, drop the new contact under
+  // the first company in the matching category bucket. Surfaces them in
+  // the right section immediately, no orphans.
+  async function handleAddContactByRole() {
+    const choices = ROLE_TYPES.map((r, i) => `${i + 1}. ${ROLE_TYPE_LABEL[r]}`).join(
+      "\n",
+    );
+    const pick = window.prompt(
+      `Pick a role for the new contact (1-${ROLE_TYPES.length}):\n\n${choices}`,
+      "1",
+    );
+    if (!pick) return;
+    const idx = parseInt(pick, 10) - 1;
+    if (Number.isNaN(idx) || idx < 0 || idx >= ROLE_TYPES.length) {
+      setError("Invalid role pick.");
+      return;
+    }
+    const role = ROLE_TYPES[idx];
+    const cat = categoryForRole(role);
+    const companyForRole = cat
+      ? companies.find((c) => c.category === cat)
+      : null;
+    try {
+      const created = await createContact(projectId, {
+        company_id: companyForRole?.id ?? null,
+        role_type: role,
+      });
+      setContacts((rows) => [...rows, created]);
+      setSelection({ kind: "contact", id: created.id });
+      // Make sure that section is expanded so they see the new row.
+      if (cat) {
+        setCollapsed((prev) => {
+          const next = new Set(prev);
+          next.delete(cat);
+          return next;
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add contact");
+    }
+  }
+
   async function handleUpdateContact(id: string, patch: ContactPatch) {
     const prev = contacts;
     setContacts((rows) =>
@@ -307,7 +389,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
             <>
               <button
                 type="button"
-                onClick={() => handleAddContact()}
+                onClick={handleAddContactByRole}
                 className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -338,21 +420,40 @@ export function ContactsModule({ projectId }: ModuleProps) {
                   (s) => s.key === "__uncategorized__",
                 )
               : groupedByCategory.sections
-            ).map((section) => (
+            ).map((section) => {
+              const isCollapsed = collapsed.has(section.key);
+              const peopleCount = section.companies.reduce(
+                (sum, { rows }) => sum + rows.length,
+                0,
+              );
+              return (
               <div key={section.key} className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 px-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                    {section.label}
-                  </span>
-                  <span className="text-[10px] text-zinc-600">
-                    {section.companies.length}{" "}
-                    {section.companies.length === 1 ? "company" : "companies"}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => toggleCollapse(section.key)}
+                    className="flex flex-1 items-center gap-2 rounded py-0.5 text-left transition hover:text-zinc-300"
+                    aria-expanded={!isCollapsed}
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+                    )}
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                      {section.label}
+                    </span>
+                    <span className="text-[10px] text-zinc-600">
+                      {section.companies.length}{" "}
+                      {section.companies.length === 1 ? "company" : "companies"}
+                      {peopleCount > 0 && ` · ${peopleCount} people`}
+                    </span>
+                  </button>
                   {canCreate && section.category && (
                     <button
                       type="button"
                       onClick={() => handleAddCompany(section.category)}
-                      className="ml-auto rounded p-0.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                      className="rounded p-0.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
                       title={`Add company under ${section.label}`}
                       aria-label={`Add company under ${section.label}`}
                     >
@@ -360,7 +461,8 @@ export function ContactsModule({ projectId }: ModuleProps) {
                     </button>
                   )}
                 </div>
-                {section.companies.length === 0 ? (
+                {!isCollapsed &&
+                  (section.companies.length === 0 ? (
                   <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/30 p-3 text-xs text-zinc-500">
                     {section.category
                       ? `Empty — click + to add the ${section.label.toLowerCase()} company.`
@@ -436,9 +538,10 @@ export function ContactsModule({ projectId }: ModuleProps) {
                       )}
                     </div>
                   ))
-                )}
+                ))}
               </div>
-            ))}
+              );
+            })}
             {groupedByCategory.orphans.length > 0 && (
               <div className="flex flex-col gap-2">
                 <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
