@@ -8,15 +8,20 @@ import {
   Loader2,
   Pencil,
   Save,
+  Settings,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
+import { canEdit, useRole, type Role } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
   createDocument,
   deleteDocument,
+  fetchActiveTemplates,
   fetchDocuments,
   fetchProjectShell,
+  generateWithTemplate,
   updateDocument,
 } from "./queries";
 import {
@@ -25,11 +30,13 @@ import {
   DOC_STATUS_STYLE,
   DOC_TEMPLATES,
   DOC_TEMPLATES_BY_TYPE,
+  type CreateTemplate,
   type DocCategory,
   type DocStatus,
   type DocTemplate,
   type GeneratedDocument,
 } from "./types";
+import { TemplatePanel } from "./TemplatePanel";
 
 type Tab = "create" | "saved";
 
@@ -41,6 +48,8 @@ const CATEGORY_ORDER: DocCategory[] = [
 ];
 
 export function CreateModule({ projectId }: ModuleProps) {
+  const role = useRole();
+  const access = templateAccess(role);
   const [tab, setTab] = useState<Tab>("create");
   const [docs, setDocs] = useState<GeneratedDocument[]>([]);
   const [project, setProject] = useState<{
@@ -52,6 +61,12 @@ export function CreateModule({ projectId }: ModuleProps) {
 
   const [composeFor, setComposeFor] = useState<DocTemplate | null>(null);
   const [openDocId, setOpenDocId] = useState<string | null>(null);
+  const [templatePanelFor, setTemplatePanelFor] = useState<DocTemplate | null>(
+    null,
+  );
+  const [activeTemplates, setActiveTemplates] = useState<
+    Record<string, CreateTemplate>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -59,13 +74,17 @@ export function CreateModule({ projectId }: ModuleProps) {
     setError(null);
     (async () => {
       try {
-        const [p, d] = await Promise.all([
+        const [p, d, ts] = await Promise.all([
           fetchProjectShell(projectId),
           fetchDocuments(projectId),
+          fetchActiveTemplates().catch(() => []),
         ]);
         if (cancelled) return;
         setProject(p);
         setDocs(d);
+        const map: Record<string, CreateTemplate> = {};
+        for (const t of ts) map[t.document_type] = t;
+        setActiveTemplates(map);
       } catch (err) {
         if (!cancelled)
           setError(err instanceof Error ? err.message : "Failed to load");
@@ -93,7 +112,6 @@ export function CreateModule({ projectId }: ModuleProps) {
     template: DocTemplate,
     fields: Record<string, string>,
   ) {
-    const content = template.render(fields, project);
     const titlePieces = [
       template.title,
       fields.report_date ||
@@ -106,13 +124,39 @@ export function CreateModule({ projectId }: ModuleProps) {
     ].filter(Boolean);
     const title = titlePieces.join(" — ");
     try {
+      // Prefer the user's uploaded template via Claude; fall back to the
+      // built-in render() if there's no active template (or Claude
+      // call fails on the network path).
+      const uploaded = activeTemplates[template.type] ?? null;
+      let content: string;
+      if (uploaded) {
+        try {
+          content = await generateWithTemplate({
+            doc_type: template.type,
+            template: uploaded,
+            fields,
+            project,
+          });
+        } catch (err) {
+          // If Claude is unavailable, don't block the user — fall back
+          // to the generic render and surface the error subtly.
+          if (typeof console !== "undefined")
+            console.warn("template generate failed; using built-in", err);
+          content = template.render(fields, project);
+        }
+      } else {
+        content = template.render(fields, project);
+      }
       const created = await createDocument({
         project_id: projectId,
         category: template.category,
         doc_type: template.type,
         title,
         content,
-        metadata: { fields },
+        metadata: {
+          fields,
+          generated_with_template: uploaded ? uploaded.id : null,
+        },
       });
       setDocs((prev) => [created, ...prev]);
       setComposeFor(null);
@@ -121,6 +165,13 @@ export function CreateModule({ projectId }: ModuleProps) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     }
+  }
+
+  function templateAccess(role: Role): { canManage: boolean; canView: boolean } {
+    // Owner / PM full; APM can view but not upload; Super has no access.
+    if (role === "super") return { canManage: false, canView: false };
+    if (role === "apm") return { canManage: false, canView: true };
+    return { canManage: canEdit(role), canView: true };
   }
 
   async function handleUpdate(id: string, content: string, status: DocStatus) {
@@ -182,26 +233,59 @@ export function CreateModule({ projectId }: ModuleProps) {
                 {DOC_CATEGORY_LABEL[cat]}
               </h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {grouped[cat].map((t) => (
-                  <button
-                    key={t.type}
-                    type="button"
-                    onClick={() => setComposeFor(t)}
-                    className="flex flex-col gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/40 p-4 text-left transition hover:border-blue-500/50 hover:bg-zinc-900"
-                  >
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-blue-400" />
-                      <h3 className="text-sm font-medium text-zinc-100">
-                        {t.title}
-                      </h3>
+                {grouped[cat].map((t) => {
+                  const hasTemplate = !!activeTemplates[t.type];
+                  return (
+                    <div
+                      key={t.type}
+                      className="group relative flex flex-col gap-1.5 rounded-md border border-zinc-800 bg-zinc-900/40 p-4 transition hover:border-blue-500/50 hover:bg-zinc-900"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setComposeFor(t)}
+                        className="flex flex-col gap-1.5 text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-400" />
+                          <h3 className="text-sm font-medium text-zinc-100">
+                            {t.title}
+                          </h3>
+                        </div>
+                        <p className="text-xs text-zinc-500">{t.description}</p>
+                        <div className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-wider">
+                          <span className="text-zinc-600">
+                            {t.fields.length} field
+                            {t.fields.length === 1 ? "" : "s"}
+                          </span>
+                          {hasTemplate && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-emerald-300">
+                              <Sparkles className="h-2.5 w-2.5" />
+                              Custom template
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                      {access.canView && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTemplatePanelFor(t);
+                          }}
+                          className={`absolute right-2 top-2 rounded-md p-1.5 transition ${
+                            hasTemplate
+                              ? "text-emerald-300 hover:bg-emerald-500/10"
+                              : "text-zinc-500 opacity-0 hover:bg-zinc-800 hover:text-zinc-200 group-hover:opacity-100"
+                          }`}
+                          title="Manage template for this document type"
+                          aria-label="Manage template"
+                        >
+                          <Settings className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
-                    <p className="text-xs text-zinc-500">{t.description}</p>
-                    <span className="mt-1 text-[10px] uppercase tracking-wider text-zinc-600">
-                      {t.fields.length} field
-                      {t.fields.length === 1 ? "" : "s"}
-                    </span>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </section>
           ))}
@@ -220,8 +304,31 @@ export function CreateModule({ projectId }: ModuleProps) {
         <ComposeModal
           template={composeFor}
           project={project}
+          activeTemplate={activeTemplates[composeFor.type] ?? null}
           onCancel={() => setComposeFor(null)}
           onCreate={handleCreate}
+        />
+      )}
+
+      {templatePanelFor && (
+        <TemplatePanel
+          template={templatePanelFor}
+          canManage={access.canManage}
+          canView={access.canView}
+          onClose={() => setTemplatePanelFor(null)}
+          onSaved={(t) =>
+            setActiveTemplates((prev) => ({
+              ...prev,
+              [t.document_type]: t,
+            }))
+          }
+          onRemoved={() =>
+            setActiveTemplates((prev) => {
+              const next = { ...prev };
+              delete next[templatePanelFor.type];
+              return next;
+            })
+          }
         />
       )}
 
@@ -348,11 +455,13 @@ function SavedTab({
 function ComposeModal({
   template,
   project,
+  activeTemplate,
   onCancel,
   onCreate,
 }: {
   template: DocTemplate;
   project: { name: string | null; address: string | null };
+  activeTemplate: CreateTemplate | null;
   onCancel: () => void;
   onCreate: (template: DocTemplate, fields: Record<string, string>) => void;
 }) {
@@ -402,6 +511,15 @@ function ComposeModal({
               {DOC_CATEGORY_LABEL[template.category]} · Project:{" "}
               {project.name ?? project.address ?? "—"}
             </p>
+            {activeTemplate && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">
+                <Sparkles className="h-2.5 w-2.5" />
+                Using your uploaded template
+                {activeTemplate.file_name
+                  ? ` (${activeTemplate.file_name})`
+                  : ""}
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -466,10 +584,12 @@ function ComposeModal({
           >
             {submitting ? (
               <Loader2 className="h-3 w-3 animate-spin" />
+            ) : activeTemplate ? (
+              <Sparkles className="h-3 w-3" />
             ) : (
               <Save className="h-3 w-3" />
             )}
-            Generate &amp; save
+            {activeTemplate ? "Generate with my template" : "Generate & save"}
           </button>
         </div>
       </div>

@@ -281,6 +281,122 @@ ${fmtUsd(f.total)}
 `,
   },
 
+  {
+    type: "lien_waiver",
+    category: "contracts",
+    title: "Lien Waiver",
+    description: "Conditional or unconditional waiver tied to a payment.",
+    fields: [
+      { key: "waiver_type", label: "Type (conditional/unconditional)", kind: "text", required: true },
+      { key: "claimant", label: "Claimant (sub or supplier)", kind: "text", required: true },
+      { key: "through_date", label: "Through date", kind: "date", required: true },
+      { key: "amount", label: "Amount paid (USD)", kind: "number" },
+      { key: "owner", label: "Owner / property", kind: "text" },
+    ],
+    render: (f, p) => `# ${f.waiver_type ? `${f.waiver_type} ` : ""}Lien Waiver
+
+**Project:** ${p.name ?? "—"} (${p.address ?? "—"})
+**Claimant:** ${f.claimant}
+**Through date:** ${fmtDate(f.through_date)}
+**Amount:** ${fmtUsd(f.amount)}
+**Owner / property:** ${f.owner || p.address || "—"}
+
+The undersigned claimant waives and releases lien rights on the project
+described above, against the property identified above, for labor,
+services, equipment, or material furnished through the date listed,
+in the amount stated.
+`,
+  },
+  {
+    type: "sow",
+    category: "contracts",
+    title: "Scope of Work (SOW)",
+    description: "Detailed scope description for a sub or trade.",
+    fields: [
+      { key: "sub_name", label: "Subcontractor", kind: "text", required: true },
+      { key: "trade", label: "Trade", kind: "text" },
+      { key: "scope", label: "Scope detail", kind: "longtext", required: true },
+      { key: "deliverables", label: "Deliverables", kind: "longtext" },
+      { key: "exclusions", label: "Exclusions", kind: "longtext" },
+    ],
+    render: (f, p) => `# Scope of Work — ${f.sub_name}${f.trade ? ` (${f.trade})` : ""}
+
+**Project:** ${p.name ?? "—"} (${p.address ?? "—"})
+
+## Scope detail
+${f.scope || "—"}
+
+## Deliverables
+${f.deliverables || "—"}
+
+## Exclusions
+${f.exclusions || "—"}
+`,
+  },
+  {
+    type: "client_contract",
+    category: "contracts",
+    title: "Client Contract",
+    description: "Owner / general contractor prime contract.",
+    fields: [
+      { key: "client_name", label: "Client", kind: "text", required: true },
+      { key: "contract_type", label: "Contract type", kind: "text", hint: "Lump sum, cost plus, GMP, T&M" },
+      { key: "contract_value", label: "Contract value (USD)", kind: "number", required: true },
+      { key: "retainage_pct", label: "Retainage %", kind: "number" },
+      { key: "start_date", label: "Start date", kind: "date" },
+      { key: "completion_date", label: "Substantial completion date", kind: "date" },
+      { key: "scope", label: "Scope of work", kind: "longtext", required: true },
+    ],
+    render: (f, p) => `# Client Contract
+
+This contract is between **${f.client_name}** (Owner) and Bruno Clay Construction
+& Management (Contractor) for work on the project located at
+**${p.address ?? p.name ?? "—"}**.
+
+## Contract type
+${f.contract_type || "—"}
+
+## Contract value
+${fmtUsd(f.contract_value)}${f.retainage_pct ? ` (subject to ${f.retainage_pct}% retainage)` : ""}
+
+## Schedule
+- **Start:** ${fmtDate(f.start_date) || "—"}
+- **Substantial completion:** ${fmtDate(f.completion_date) || "—"}
+
+## Scope of work
+${f.scope || "—"}
+
+## Terms
+Contractor provides all labor, materials, supervision, and tools required to
+complete the scope. Owner pays per the standard pay-app schedule.
+`,
+  },
+  {
+    type: "rfp",
+    category: "contracts",
+    title: "Request for Proposal (RFP)",
+    description: "Bid request to a sub for a defined scope.",
+    fields: [
+      { key: "trade", label: "Trade", kind: "text", required: true },
+      { key: "scope", label: "Scope to bid", kind: "longtext", required: true },
+      { key: "due_date", label: "Bids due by", kind: "date", required: true },
+      { key: "site_walkthrough", label: "Site walkthrough", kind: "text" },
+      { key: "submission_format", label: "Submission format", kind: "text" },
+    ],
+    render: (f, p) => `# Request for Proposal — ${f.trade}
+
+**Project:** ${p.name ?? "—"} (${p.address ?? "—"})
+**Bids due:** ${fmtDate(f.due_date)}
+${f.site_walkthrough ? `**Site walkthrough:** ${f.site_walkthrough}` : ""}
+
+## Scope to bid
+${f.scope || "—"}
+
+## Submission format
+${f.submission_format || "Lump-sum proposal with itemized breakdown, schedule, exclusions, and qualifications."}
+`,
+  },
+
   // ---------- Client Facing ----------
   {
     type: "client_proposal",
@@ -345,3 +461,39 @@ ${f.next_steps || "—"}
 
 export const DOC_TEMPLATES_BY_TYPE: Record<string, DocTemplate> =
   Object.fromEntries(DOC_TEMPLATES.map((t) => [t.type, t]));
+
+// ---------- Uploaded reference templates (per doc_type) ----------
+
+export type TemplateSmartField = {
+  key: string;
+  label: string;
+  example: string;
+  kind: "text" | "date" | "number" | "longtext";
+};
+
+export type TemplateBoilerplate = {
+  heading: string;
+  body: string;
+};
+
+export type TemplateExtractedStructure = {
+  doc_type_guess: string;
+  summary: string;
+  structure: string[];
+  smart_fields: TemplateSmartField[];
+  boilerplate: TemplateBoilerplate[];
+  tone: string;
+  formatting_notes: string;
+};
+
+export type CreateTemplate = {
+  id: string;
+  document_type: string;
+  file_url: string | null;
+  file_name: string | null;
+  source_text: string | null;
+  extracted_structure: TemplateExtractedStructure | null;
+  uploaded_by: string | null;
+  uploaded_at: string;
+  active: boolean;
+};
