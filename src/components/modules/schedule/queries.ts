@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 const PHASE_COLUMNS =
-  "id, project_id, name, status, start_date, end_date, notes, sort_order, is_milestone";
+  "id, project_id, name, status, start_date, end_date, notes, sort_order, is_milestone, progress_pct";
 
 const TASK_COLUMNS =
   "id, phase_id, name, status, assigned_sub_id, assigned_user_id, start_date, end_date, notes, sort_order";

@@ -16,6 +16,7 @@ import {
   fetchJobExtractionOptions,
   fetchJobMaterialOptions,
   fetchJobMaterials,
+  fetchJobPhaseOptions,
   fetchJobSubOptions,
   fetchJobs,
   setJobDrawings,
@@ -28,6 +29,7 @@ import {
   JOB_STATUS_LABEL,
   JOB_STATUS_STYLE,
   type Job,
+  type JobPhaseOption,
   type JobDrawing,
   type JobDrawingOption,
   type JobExtractionOption,
@@ -48,6 +50,7 @@ export function JobsSection({
   const [materials, setMaterials] = useState<JobMaterial[]>([]);
   const [drawings, setDrawings] = useState<JobDrawing[]>([]);
   const [subOptions, setSubOptions] = useState<JobSubOption[]>([]);
+  const [phaseOptions, setPhaseOptions] = useState<JobPhaseOption[]>([]);
   const [materialOptions, setMaterialOptions] = useState<JobMaterialOption[]>(
     [],
   );
@@ -66,12 +69,13 @@ export function JobsSection({
     setError(null);
     (async () => {
       try {
-        const [j, subs, mats, dwgs, exts] = await Promise.all([
+        const [j, subs, mats, dwgs, exts, phases] = await Promise.all([
           fetchJobs(projectId),
           fetchJobSubOptions(projectId),
           fetchJobMaterialOptions(projectId),
           fetchJobDrawingOptions(projectId),
           fetchJobExtractionOptions(projectId),
+          fetchJobPhaseOptions(projectId),
         ]);
         const ids = j.map((x) => x.id);
         const [jm, jd] = await Promise.all([
@@ -83,6 +87,7 @@ export function JobsSection({
         setMaterials(jm);
         setDrawings(jd);
         setSubOptions(subs);
+        setPhaseOptions(phases);
         setMaterialOptions(mats);
         setDrawingOptions(dwgs);
         setExtractionOptions(exts);
@@ -356,6 +361,48 @@ export function JobsSection({
                               end_date: e.target.value || null,
                             })
                           }
+                          className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-200 outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                        />
+                      </Field>
+                      <Field label="Schedule phase">
+                        <select
+                          value={j.parent_phase_id ?? ""}
+                          disabled={!editable}
+                          onChange={(e) =>
+                            handlePatch(j.id, {
+                              parent_phase_id: e.target.value || null,
+                            })
+                          }
+                          className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-200 outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                        >
+                          <option value="">— None —</option>
+                          {phaseOptions.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Location">
+                        <input
+                          type="text"
+                          value={j.location ?? ""}
+                          disabled={!editable}
+                          placeholder="e.g. 2nd floor, west bath"
+                          onChange={(e) =>
+                            setJobs((rows) =>
+                              rows.map((x) =>
+                                x.id === j.id
+                                  ? { ...x, location: e.target.value }
+                                  : x,
+                              ),
+                            )
+                          }
+                          onBlur={(e) => {
+                            const v = e.target.value;
+                            if (v !== (j.location ?? ""))
+                              handlePatch(j.id, { location: v || null });
+                          }}
                           className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-sm text-zinc-200 outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                         />
                       </Field>

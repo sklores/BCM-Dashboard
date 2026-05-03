@@ -429,6 +429,14 @@ function SortablePhaseRow({
           <span className="text-xs font-normal text-zinc-500">
             ({taskCount})
           </span>
+          {phase.progress_pct !== null && phase.progress_pct !== undefined && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-300"
+              title="Progress driven by jobs marked complete"
+            >
+              {phase.progress_pct}%
+            </span>
+          )}
           <label
             className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
               phase.is_milestone

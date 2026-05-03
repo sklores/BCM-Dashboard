@@ -35,7 +35,16 @@ export type Job = {
   start_date: string | null;
   end_date: string | null;
   notes: string | null;
+  parent_phase_id: string | null;
+  parent_subtask_id: string | null;
+  location: string | null;
   created_at: string;
+};
+
+export type JobPhaseOption = {
+  id: string;
+  name: string;
+  sort_order: number;
 };
 
 export type JobMaterial = {

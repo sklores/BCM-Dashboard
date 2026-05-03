@@ -11,7 +11,30 @@ type Todo = {
   done: boolean;
   sort_order: number;
   created_at: string;
+  device_id: string | null;
 };
+
+// Per-device pseudo-user id used to scope To Do items to "this user" until
+// real auth lands in v2. Stored in localStorage so the same browser keeps
+// seeing the same list across reloads. Other devices / browsers / users see
+// their own list.
+const DEVICE_ID_KEY = "bcm-dashboard-device-id";
+
+function getDeviceId(): string {
+  if (typeof window === "undefined") return "00000000-0000-0000-0000-000000000000";
+  const existing = window.localStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+  const fresh =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  try {
+    window.localStorage.setItem(DEVICE_ID_KEY, fresh);
+  } catch {
+    // ignore storage errors
+  }
+  return fresh;
+}
 
 export function TodoSection({
   projectId,
@@ -24,8 +47,14 @@ export function TodoSection({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [deviceId, setDeviceId] = useState<string>("");
 
   useEffect(() => {
+    setDeviceId(getDeviceId());
+  }, []);
+
+  useEffect(() => {
+    if (!deviceId) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -33,8 +62,9 @@ export function TodoSection({
       try {
         const { data, error } = await supabase
           .from("personal_todos")
-          .select("id, project_id, title, done, sort_order, created_at")
+          .select("id, project_id, title, done, sort_order, created_at, device_id")
           .eq("project_id", projectId)
+          .eq("device_id", deviceId)
           .order("done", { ascending: true })
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true });
@@ -50,11 +80,11 @@ export function TodoSection({
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, deviceId]);
 
   async function handleAdd() {
     const title = draft.trim();
-    if (!title) return;
+    if (!title || !deviceId) return;
     const optimistic: Todo = {
       id: `temp-${Date.now()}`,
       project_id: projectId,
@@ -62,14 +92,15 @@ export function TodoSection({
       done: false,
       sort_order: 0,
       created_at: new Date().toISOString(),
+      device_id: deviceId,
     };
     setTodos((prev) => [...prev, optimistic]);
     setDraft("");
     try {
       const { data, error } = await supabase
         .from("personal_todos")
-        .insert({ project_id: projectId, title })
-        .select("id, project_id, title, done, sort_order, created_at")
+        .insert({ project_id: projectId, title, device_id: deviceId })
+        .select("id, project_id, title, done, sort_order, created_at, device_id")
         .single();
       if (error) throw error;
       setTodos((prev) =>
@@ -124,8 +155,8 @@ export function TodoSection({
     <div className="space-y-3">
       {error && <p className="text-sm text-red-400">{error}</p>}
       <p className="text-xs text-zinc-500">
-        Quick personal checklist for this project. Not assigned to anyone, not
-        on the schedule — just things to remember.
+        Quick personal checklist for this project — scoped to this browser
+        until full user accounts ship.
       </p>
 
       {editable && (

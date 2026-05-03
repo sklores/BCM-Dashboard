@@ -6,12 +6,13 @@ import type {
   JobExtractionOption,
   JobMaterial,
   JobMaterialOption,
+  JobPhaseOption,
   JobStatus,
   JobSubOption,
 } from "./types";
 
 const JOB_COLUMNS =
-  "id, project_id, sub_id, title, scope, status, start_date, end_date, notes, created_at";
+  "id, project_id, sub_id, title, scope, status, start_date, end_date, notes, parent_phase_id, parent_subtask_id, location, created_at";
 
 export async function fetchJobs(projectId: string): Promise<Job[]> {
   const { data, error } = await supabase
@@ -65,6 +66,9 @@ export type JobPatch = Partial<{
   start_date: string | null;
   end_date: string | null;
   notes: string | null;
+  parent_phase_id: string | null;
+  parent_subtask_id: string | null;
+  location: string | null;
 }>;
 
 export async function updateJob(id: string, patch: JobPatch): Promise<void> {
@@ -188,4 +192,16 @@ export async function fetchJobExtractionOptions(
     label: (e.label as string | null) ?? null,
     category: (e.category as string | null) ?? null,
   }));
+}
+
+export async function fetchJobPhaseOptions(
+  projectId: string,
+): Promise<JobPhaseOption[]> {
+  const { data, error } = await supabase
+    .from("schedule_phases")
+    .select("id, name, sort_order")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as JobPhaseOption[];
 }
