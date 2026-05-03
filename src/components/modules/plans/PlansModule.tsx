@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ExternalLink,
+  Link as LinkIcon,
   Loader2,
   Map as MapIcon,
   Maximize2,
@@ -43,6 +44,7 @@ import {
 import {
   clearDrawingPdf,
   createDrawing,
+  ensurePlansShareToken,
   createRfi,
   createSubmittal,
   deleteDrawing,
@@ -112,6 +114,11 @@ export function PlansModule({ projectId }: ModuleProps) {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shareInfo, setShareInfo] = useState<string | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<{
+    file: File;
+    forDrawingId: string | null;
+  } | null>(null);
   const [extracting, setExtracting] = useState<Drawing | null>(null);
   const [generalNotes, setGeneralNotes] = useState<GeneralNote[]>([]);
 
@@ -148,12 +155,98 @@ export function PlansModule({ projectId }: ModuleProps) {
     };
   }, [projectId]);
 
+  async function commitVerifiedUpload(verifiedBy: string, verifiedDate: string) {
+    if (!pendingUpload) return;
+    const { file, forDrawingId } = pendingUpload;
+    setPendingUpload(null);
+    try {
+      if (forDrawingId) {
+        const url = await uploadDrawingPdf(projectId, forDrawingId, file);
+        await updateDrawing(forDrawingId, {
+          pdf_url: url,
+          upload_verified_by: verifiedBy.trim() || null,
+          upload_verified_date: verifiedDate || null,
+        });
+        setDrawings((rows) =>
+          rows.map((d) =>
+            d.id === forDrawingId
+              ? {
+                  ...d,
+                  pdf_url: url,
+                  upload_verified_by: verifiedBy.trim() || null,
+                  upload_verified_date: verifiedDate || null,
+                }
+              : d,
+          ),
+        );
+        runTitleBlockRead(forDrawingId, url)
+          .then(async () => {
+            const fresh = await fetchDrawings(projectId);
+            setDrawings(fresh);
+          })
+          .catch(() => {});
+        return;
+      }
+      const titleGuess = file.name
+        .replace(/\.pdf$/i, "")
+        .replace(/[_-]+/g, " ")
+        .trim();
+      const created = await createDrawing(projectId, {
+        title: titleGuess || null,
+        upload_verified_by: verifiedBy.trim() || null,
+        upload_verified_date: verifiedDate || null,
+      });
+      const url = await uploadDrawingPdf(projectId, created.id, file);
+      await updateDrawing(created.id, { pdf_url: url });
+      setDrawings((rows) => [{ ...created, pdf_url: url }, ...rows]);
+      runTitleBlockRead(created.id, url)
+        .then(async () => {
+          const fresh = await fetchDrawings(projectId);
+          setDrawings(fresh);
+        })
+        .catch(() => {});
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    }
+  }
+
+  async function handleShareCurrentSet() {
+    try {
+      const token = await ensurePlansShareToken(projectId);
+      const url = `${window.location.origin}/share/plans/${token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setError(null);
+        setShareInfo(`Copied: ${url}`);
+        setTimeout(() => setShareInfo(null), 5000);
+      } catch {
+        setShareInfo(url);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create link");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
         <MapIcon className="h-6 w-6 text-blue-400" />
         <h1 className="text-2xl font-semibold text-zinc-100">Plans</h1>
+        <button
+          type="button"
+          onClick={handleShareCurrentSet}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+          title="Copy a public link to the current set"
+        >
+          <LinkIcon className="h-3.5 w-3.5" />
+          Share current set
+        </button>
       </div>
+      {shareInfo && (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-300">
+          {shareInfo}
+        </div>
+      )}
 
       {!editable && role === "apm" && (
         <p className="text-xs text-zinc-500">
@@ -225,23 +318,8 @@ export function PlansModule({ projectId }: ModuleProps) {
             }
           }}
           onUploadPdf={async (id, file) => {
-            try {
-              const url = await uploadDrawingPdf(projectId, id, file);
-              setDrawings((rows) =>
-                rows.map((d) => (d.id === id ? { ...d, pdf_url: url } : d)),
-              );
-              // Auto-read the title block in the background.
-              runTitleBlockRead(id, url)
-                .then(async () => {
-                  const fresh = await fetchDrawings(projectId);
-                  setDrawings(fresh);
-                })
-                .catch(() => {
-                  /* non-fatal */
-                });
-            } catch (err) {
-              setError(err instanceof Error ? err.message : "Upload failed");
-            }
+            // Defer until the verify modal is confirmed.
+            setPendingUpload({ file, forDrawingId: id });
           }}
           onClearPdf={async (id) => {
             try {
@@ -255,31 +333,8 @@ export function PlansModule({ projectId }: ModuleProps) {
           }}
           onExtract={(d) => setExtracting(d)}
           onUploadNew={async (file) => {
-            try {
-              const titleGuess = file.name
-                .replace(/\.pdf$/i, "")
-                .replace(/[_-]+/g, " ")
-                .trim();
-              const created = await createDrawing(projectId, {
-                title: titleGuess || null,
-              });
-              const url = await uploadDrawingPdf(projectId, created.id, file);
-              setDrawings((rows) => [
-                { ...created, pdf_url: url },
-                ...rows,
-              ]);
-              // Auto-read the title block in the background.
-              runTitleBlockRead(created.id, url)
-                .then(async () => {
-                  const fresh = await fetchDrawings(projectId);
-                  setDrawings(fresh);
-                })
-                .catch(() => {
-                  /* non-fatal */
-                });
-            } catch (err) {
-              setError(err instanceof Error ? err.message : "Upload failed");
-            }
+            // Defer the actual upload until the user verifies date + uploader.
+            setPendingUpload({ file, forDrawingId: null });
           }}
           onAddRevision={async (existing) => {
             try {
@@ -480,6 +535,84 @@ export function PlansModule({ projectId }: ModuleProps) {
           }
         />
       )}
+
+      {pendingUpload && (
+        <UploadVerifyModal
+          fileName={pendingUpload.file.name}
+          onCancel={() => setPendingUpload(null)}
+          onConfirm={commitVerifiedUpload}
+        />
+      )}
+    </div>
+  );
+}
+
+function UploadVerifyModal({
+  fileName,
+  onCancel,
+  onConfirm,
+}: {
+  fileName: string;
+  onCancel: () => void;
+  onConfirm: (uploadedBy: string, uploadedDate: string) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [name, setName] = useState("");
+  const [date, setDate] = useState(today);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={(e) => e.target === e.currentTarget && onCancel()}
+    >
+      <div className="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-xl">
+        <h2 className="text-lg font-semibold text-zinc-100">
+          Verify upload
+        </h2>
+        <p className="mt-1 text-xs text-zinc-500 break-all">{fileName}</p>
+        <div className="mt-4 space-y-3">
+          <label className="block text-xs">
+            <span className="mb-1 block uppercase tracking-wider text-zinc-500">
+              Uploader name *
+            </span>
+            <input
+              type="text"
+              value={name}
+              autoFocus
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Who is uploading this?"
+              className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+          </label>
+          <label className="block text-xs">
+            <span className="mb-1 block uppercase tracking-wider text-zinc-500">
+              Upload date *
+            </span>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+          </label>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={!name.trim() || !date}
+            onClick={() => onConfirm(name, date)}
+            className="rounded-md border border-blue-500/40 bg-blue-500/15 px-3 py-1.5 text-xs text-blue-300 hover:bg-blue-500/25 disabled:opacity-40"
+          >
+            Confirm &amp; upload
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

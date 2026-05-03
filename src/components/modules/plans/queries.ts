@@ -9,7 +9,7 @@ import type {
 } from "./types";
 
 const DRAWING_COLUMNS =
-  "id, project_id, drawing_number, title, type, revision_number, revision_date, uploaded_by, pdf_url, status, superseded_by, created_at, title_block_read, extraction_status, extraction_completed_at, scale, sheet_size, project_name";
+  "id, project_id, drawing_number, title, type, revision_number, revision_date, uploaded_by, pdf_url, status, superseded_by, created_at, title_block_read, extraction_status, extraction_completed_at, scale, sheet_size, project_name, upload_verified_date, upload_verified_by";
 
 const PIN_COLUMNS =
   "id, drawing_id, x_position, y_position, pin_number, note, rfi_id, created_by, created_at";
@@ -50,6 +50,8 @@ export type DrawingPatch = Partial<
     | "scale"
     | "sheet_size"
     | "project_name"
+    | "upload_verified_date"
+    | "upload_verified_by"
   >
 >;
 
@@ -689,4 +691,29 @@ export async function deleteGeneralNote(id: string): Promise<void> {
     .delete()
     .eq("id", id);
   if (error) throw error;
+}
+
+// ---------- Share token (one persistent link per project) ----------
+
+export async function ensurePlansShareToken(projectId: string): Promise<string> {
+  const existing = await supabase
+    .from("plans_share_tokens")
+    .select("token")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!existing.error && existing.data) return existing.data.token as string;
+
+  const fresh =
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID().replace(/-/g, "")
+      : `${Date.now()}${Math.random().toString(36).slice(2, 12)}`;
+  const ins = await supabase
+    .from("plans_share_tokens")
+    .insert({ project_id: projectId, token: fresh })
+    .select("token")
+    .single();
+  if (ins.error) throw ins.error;
+  return ins.data.token as string;
 }

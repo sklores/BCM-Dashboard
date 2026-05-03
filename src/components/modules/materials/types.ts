@@ -1,24 +1,28 @@
-export type DetailedStatus = "looking" | "found" | "purchased" | "onsite";
+export type DetailedStatus =
+  | "specified"
+  | "ordered"
+  | "delivered"
+  | "installed";
 
 export const DETAILED_STATUSES: DetailedStatus[] = [
-  "looking",
-  "found",
-  "purchased",
-  "onsite",
+  "specified",
+  "ordered",
+  "delivered",
+  "installed",
 ];
 
 export const DETAILED_STATUS_LABEL: Record<DetailedStatus, string> = {
-  looking: "Looking",
-  found: "Found",
-  purchased: "Purchased",
-  onsite: "On site",
+  specified: "Specified",
+  ordered: "Ordered",
+  delivered: "Delivered",
+  installed: "Installed",
 };
 
 export const DETAILED_STATUS_STYLE: Record<DetailedStatus, string> = {
-  looking: "bg-zinc-800 text-zinc-300 border-zinc-700",
-  found: "bg-blue-500/10 text-blue-300 border-blue-500/30",
-  purchased: "bg-amber-500/10 text-amber-300 border-amber-500/30",
-  onsite: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
+  specified: "bg-zinc-800 text-zinc-300 border-zinc-700",
+  ordered: "bg-blue-500/10 text-blue-300 border-blue-500/30",
+  delivered: "bg-amber-500/10 text-amber-300 border-amber-500/30",
+  installed: "bg-emerald-500/10 text-emerald-300 border-emerald-500/30",
 };
 
 export type Material = {

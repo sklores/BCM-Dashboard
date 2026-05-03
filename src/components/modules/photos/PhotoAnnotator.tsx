@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Camera,
+  Cloud,
   Loader2,
   MousePointer2,
   Pencil,
@@ -13,17 +14,20 @@ import {
   Type,
   Undo2,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { insertPhoto, uploadPhotoBlob } from "./queries";
 import type { Photo } from "./types";
 
-type Tool = "pen" | "text" | "arrow" | "rect" | "screenshot";
+type Tool = "pen" | "text" | "arrow" | "rect" | "cloud" | "screenshot";
 
 const TOOL_LABEL: Record<Tool, string> = {
   pen: "Pen",
   text: "Text",
   arrow: "Arrow",
   rect: "Rectangle",
+  cloud: "Cloud",
   screenshot: "Screenshot",
 };
 
@@ -42,7 +46,49 @@ type Stroke =
   | { kind: "pen"; color: string; size: number; points: Array<[number, number]> }
   | { kind: "text"; color: string; size: number; fontPx: number; x: number; y: number; text: string }
   | { kind: "arrow"; color: string; size: number; x1: number; y1: number; x2: number; y2: number }
-  | { kind: "rect"; color: string; size: number; x: number; y: number; w: number; h: number };
+  | { kind: "rect"; color: string; size: number; x: number; y: number; w: number; h: number }
+  | { kind: "cloud"; color: string; size: number; x: number; y: number; w: number; h: number };
+
+// Cloud shape: a sequence of outward-bulging arcs along a normalized
+// rectangle. Designed to look like an architectural revision-cloud.
+function drawCloud(
+  ctx: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  w0: number,
+  h0: number,
+) {
+  const x = w0 < 0 ? x0 + w0 : x0;
+  const y = h0 < 0 ? y0 + h0 : y0;
+  const w = Math.abs(w0);
+  const h = Math.abs(h0);
+  if (w < 4 || h < 4) return;
+  const baseR = Math.max(8, Math.min(w, h) / 8);
+  const topCount = Math.max(3, Math.round(w / (baseR * 1.6)));
+  const sideCount = Math.max(2, Math.round(h / (baseR * 1.6)));
+  ctx.beginPath();
+  // Top edge (left → right) — bumps pointing up.
+  for (let i = 0; i < topCount; i++) {
+    const cx = x + (i + 0.5) * (w / topCount);
+    ctx.arc(cx, y, baseR, Math.PI, 2 * Math.PI, false);
+  }
+  // Right edge (top → bottom) — bumps pointing right.
+  for (let i = 0; i < sideCount; i++) {
+    const cy = y + (i + 0.5) * (h / sideCount);
+    ctx.arc(x + w, cy, baseR, 1.5 * Math.PI, 0.5 * Math.PI, false);
+  }
+  // Bottom edge (right → left) — bumps pointing down.
+  for (let i = 0; i < topCount; i++) {
+    const cx = x + w - (i + 0.5) * (w / topCount);
+    ctx.arc(cx, y + h, baseR, 0, Math.PI, false);
+  }
+  // Left edge (bottom → top) — bumps pointing left.
+  for (let i = 0; i < sideCount; i++) {
+    const cy = y + h - (i + 0.5) * (h / sideCount);
+    ctx.arc(x, cy, baseR, 0.5 * Math.PI, 1.5 * Math.PI, false);
+  }
+  ctx.stroke();
+}
 
 export function PhotoAnnotator({
   photo,
@@ -60,6 +106,7 @@ export function PhotoAnnotator({
 
   const [imgLoaded, setImgLoaded] = useState(false);
   const [tool, setTool] = useState<Tool>("pen");
+  const [zoom, setZoom] = useState<number>(1);
   const [color, setColor] = useState<string>(COLORS[0]);
   const [size, setSize] = useState<number>(4);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
@@ -202,6 +249,8 @@ export function PhotoAnnotator({
       ctx.beginPath();
       ctx.rect(s.x, s.y, s.w, s.h);
       ctx.stroke();
+    } else if (s.kind === "cloud") {
+      drawCloud(ctx, s.x, s.y, s.w, s.h);
     } else if (s.kind === "arrow") {
       const dx = s.x2 - s.x1;
       const dy = s.y2 - s.y1;
@@ -327,6 +376,9 @@ export function PhotoAnnotator({
     } else if (tool === "rect") {
       setDrawing({ kind: "rect", color, size, x, y, w: 0, h: 0 });
       (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    } else if (tool === "cloud") {
+      setDrawing({ kind: "cloud", color, size, x, y, w: 0, h: 0 });
+      (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     } else if (tool === "arrow") {
       setDrawing({ kind: "arrow", color, size, x1: x, y1: y, x2: x, y2: y });
       (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
@@ -360,6 +412,8 @@ export function PhotoAnnotator({
     if (drawing.kind === "pen") {
       setDrawing({ ...drawing, points: [...drawing.points, [x, y]] });
     } else if (drawing.kind === "rect") {
+      setDrawing({ ...drawing, w: x - drawing.x, h: y - drawing.y });
+    } else if (drawing.kind === "cloud") {
       setDrawing({ ...drawing, w: x - drawing.x, h: y - drawing.y });
     } else if (drawing.kind === "arrow") {
       setDrawing({ ...drawing, x2: x, y2: y });
@@ -544,6 +598,7 @@ export function PhotoAnnotator({
     text: Type,
     arrow: ArrowUpRight,
     rect: Square,
+    cloud: Cloud,
     screenshot: Camera,
   };
 
@@ -609,6 +664,35 @@ export function PhotoAnnotator({
           />
           <span className="w-5 text-right text-zinc-300">{size}</span>
         </label>
+
+        <div className="ml-2 inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(0.5, z / 1.25))}
+            disabled={zoom <= 0.5}
+            className="rounded p-1 text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
+            title="Zoom out"
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            className="px-1 text-[11px] text-zinc-300 hover:text-zinc-100"
+            title="Reset zoom"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(4, z * 1.25))}
+            disabled={zoom >= 4}
+            className="rounded p-1 text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
+            title="Zoom in"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </button>
+        </div>
 
         <button
           type="button"
@@ -705,7 +789,14 @@ export function PhotoAnnotator({
             Loading image…
           </div>
         )}
-        <div className="relative max-h-full max-w-full">
+        <div className="max-h-full max-w-full overflow-auto">
+        <div
+          className="relative"
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
+          }}
+        >
           <canvas
             ref={baseCanvasRef}
             className="block max-h-[78vh] max-w-full select-none rounded-md shadow-lg"
@@ -739,7 +830,7 @@ export function PhotoAnnotator({
               onCancel={cancelText}
             />
           )}
-
+        </div>
         </div>
 
         <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-zinc-800 bg-zinc-950/80 px-3 py-1 text-[11px] text-zinc-400">
@@ -752,7 +843,9 @@ export function PhotoAnnotator({
                 ? "Drag from base to tip"
                 : tool === "screenshot"
                   ? "Drag to crop — releases to save as a new tagged photo (Enter to confirm, Esc to cancel)"
-                  : "Drag to draw a rectangle"}
+                  : tool === "cloud"
+                    ? "Drag to draw a revision cloud"
+                    : "Drag to draw a rectangle"}
         </div>
       </div>
     </div>

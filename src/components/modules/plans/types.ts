@@ -124,6 +124,8 @@ export type Drawing = {
   scale: string | null;
   sheet_size: string | null;
   project_name: string | null;
+  upload_verified_date: string | null;
+  upload_verified_by: string | null;
 };
 
 export type DrawingPin = {
