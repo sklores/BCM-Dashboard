@@ -98,6 +98,7 @@ export type Company = {
   phone: string | null;
   primary_contact_id: string | null;
   category: CompanyCategory | null;
+  sub_id: string | null;
   created_at: string;
 };
 

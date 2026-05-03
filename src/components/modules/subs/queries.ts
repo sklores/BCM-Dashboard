@@ -56,7 +56,42 @@ export async function addSubToProject(
     .select("id, project_id, sub_id")
     .single();
   if (error) throw error;
+
+  // Mirror into companies (Contacts) if not already there. The category is
+  // a best-guess from the sub's trade — falls back to subs_trade.
+  await mirrorSubAsCompany(projectId, subId);
+
   return data as ProjectSub;
+}
+
+async function mirrorSubAsCompany(
+  projectId: string,
+  subId: string,
+): Promise<void> {
+  // Skip if a company for this sub on this project already exists.
+  const existing = await supabase
+    .from("companies")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("sub_id", subId)
+    .maybeSingle();
+  if (existing.data) return;
+
+  const sub = await supabase
+    .from("subs")
+    .select("name, trade, contact_phone")
+    .eq("id", subId)
+    .maybeSingle();
+  if (sub.error || !sub.data) return;
+  const trade = ((sub.data.trade as string | null) ?? "").toLowerCase();
+  const isMep = /electric|plumb|hvac|mechanical|fire|sprinkler/.test(trade);
+  await supabase.from("companies").insert({
+    project_id: projectId,
+    company_name: (sub.data.name as string) ?? "",
+    category: isMep ? "subs_mep" : "subs_trade",
+    sub_id: subId,
+    phone: (sub.data.contact_phone as string | null) ?? null,
+  });
 }
 
 export async function removeSubFromProject(linkId: string): Promise<void> {

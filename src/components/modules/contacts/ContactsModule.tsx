@@ -710,6 +710,36 @@ function ContactDetail({
           <Mail className="h-3.5 w-3.5" />
           Send message
         </a>
+        {(() => {
+          const co = contact.company_id
+            ? companies.find((c) => c.id === contact.company_id)
+            : null;
+          if (
+            co &&
+            (co.category === "subs_trade" || co.category === "subs_mep")
+          ) {
+            return (
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent("bcm-navigate", {
+                      detail: {
+                        moduleKey: "subs",
+                        subName: co.company_name,
+                      },
+                    }),
+                  );
+                }}
+                className="flex items-center gap-1.5 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1 text-xs text-zinc-200 hover:border-blue-500 hover:text-blue-400"
+                title="Open this contact's company in the Subs module"
+              >
+                Open in Subs
+              </button>
+            );
+          }
+          return null;
+        })()}
         <QuickActionStub label="Create RFI" />
         <QuickActionStub label="Generate document" />
         <QuickActionStub label="View all tasks" />

@@ -9,7 +9,7 @@ import {
 } from "./types";
 
 const COMPANY_COLUMNS =
-  "id, project_id, company_name, address, website, phone, primary_contact_id, category, created_at";
+  "id, project_id, company_name, address, website, phone, primary_contact_id, category, sub_id, created_at";
 
 const COMPANY_COLUMNS_LEGACY =
   "id, project_id, company_name, address, website, phone, primary_contact_id, created_at";
@@ -104,6 +104,31 @@ export async function createCompany(
     company_name: name,
   };
   if (!categoryColumnMissing) payload.category = category;
+
+  // If we're creating a Subs Trade or Subs MEP company, also create a
+  // matching sub row so the two modules stay in sync. The sub_id link
+  // makes "Open in Subs" instant.
+  let mirroredSubId: string | null = null;
+  if (
+    !categoryColumnMissing &&
+    (category === "subs_trade" || category === "subs_mep") &&
+    name.trim() !== ""
+  ) {
+    const subRes = await supabase
+      .from("subs")
+      .insert({ name: name.trim() })
+      .select("id")
+      .single();
+    if (!subRes.error && subRes.data) {
+      mirroredSubId = subRes.data.id as string;
+      payload.sub_id = mirroredSubId;
+      // Also link the sub to this project so it shows in the Subs list.
+      await supabase
+        .from("project_subs")
+        .insert({ project_id: projectId, sub_id: mirroredSubId });
+    }
+  }
+
   const cols = categoryColumnMissing ? COMPANY_COLUMNS_LEGACY : COMPANY_COLUMNS;
   const { data, error } = await supabase
     .from("companies")
@@ -113,8 +138,13 @@ export async function createCompany(
   if (error) throw error;
   const row = data as unknown as Omit<Company, "category"> & {
     category?: CompanyCategory | null;
+    sub_id?: string | null;
   };
-  return { ...row, category: row.category ?? null };
+  return {
+    ...row,
+    category: row.category ?? null,
+    sub_id: row.sub_id ?? null,
+  };
 }
 
 export async function updateCompany(
