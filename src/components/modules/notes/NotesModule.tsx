@@ -17,6 +17,7 @@ import {
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import { useFloatingNotes } from "@/components/floating-notes/FloatingNotes";
+import { supabase } from "@/lib/supabase";
 import {
   addAttendee,
   convertActionItemToTask,
@@ -147,6 +148,32 @@ export function NotesModule({ projectId }: ModuleProps) {
     } catch (err) {
       setScratch(prev);
       setError(err instanceof Error ? err.message : "Failed to delete note");
+    }
+  }
+
+  // Promote a note to a Work → Task. The note stays in Notes; the new
+  // task carries the note's title/body and links back via linked_module
+  // /linked_record_id (added in tasks_v2). The note's
+  // promoted_to_message_id field would be reused for symmetry but we
+  // don't have a reciprocal link yet — keep one-way for now.
+  async function handleConvertNoteToTask(n: ScratchNote) {
+    try {
+      const { error } = await supabase.from("tasks").insert({
+        project_id: projectId,
+        title: n.title?.trim() || "Note action item",
+        description: n.body ?? null,
+        status: "not_started",
+        task_type: "general",
+        priority: "medium",
+        linked_module: "notes",
+        linked_record_id: n.id,
+      });
+      if (error) throw error;
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to convert to task",
+      );
+      throw err;
     }
   }
 
@@ -417,6 +444,7 @@ export function NotesModule({ projectId }: ModuleProps) {
           onAdd={handleAddScratch}
           onOpen={(n) => floating.openNote("scratch", n.id)}
           onDelete={handleDeleteScratchInline}
+          onConvertToTask={handleConvertNoteToTask}
         />
       )}
 
@@ -486,13 +514,33 @@ function ScratchSection({
   onAdd,
   onOpen,
   onDelete,
+  onConvertToTask,
 }: {
   notes: ScratchNote[];
   editable: boolean;
   onAdd: () => Promise<void>;
   onOpen: (n: ScratchNote) => void;
   onDelete: (id: string) => Promise<void>;
+  onConvertToTask: (n: ScratchNote) => Promise<void>;
 }) {
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set());
+  async function handleConvert(n: ScratchNote) {
+    setConvertingId(n.id);
+    try {
+      await onConvertToTask(n);
+      setConvertedIds((prev) => new Set([...prev, n.id]));
+      setTimeout(() => {
+        setConvertedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(n.id);
+          return next;
+        });
+      }, 2500);
+    } finally {
+      setConvertingId(null);
+    }
+  }
   const [search, setSearch] = useState("");
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -568,14 +616,38 @@ function ScratchSection({
                 </span>
               </button>
               {editable && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(n.id)}
-                  className="absolute right-2 top-2 rounded p-1 text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
-                  aria-label="Delete note"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="absolute right-2 top-2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleConvert(n);
+                    }}
+                    disabled={
+                      convertingId === n.id || convertedIds.has(n.id)
+                    }
+                    className={`rounded-md border px-1.5 py-0.5 text-[10px] transition opacity-0 group-hover:opacity-100 disabled:opacity-100 ${
+                      convertedIds.has(n.id)
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                        : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+                    }`}
+                    title="Create a Task in Work from this note"
+                  >
+                    {convertedIds.has(n.id)
+                      ? "✓ Task created"
+                      : convertingId === n.id
+                        ? "…"
+                        : "→ Task"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(n.id)}
+                    className="rounded p-1 text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                    aria-label="Delete note"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               )}
             </div>
           ))}

@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from "react";
 import {
+  Briefcase,
   ChevronDown,
   ChevronRight,
   FileUp,
@@ -80,6 +81,11 @@ type Handlers = {
   onDeleteTask: (id: string) => Promise<void>;
   onDeleteSubtask: (id: string) => Promise<void>;
   onDeleteMaterialCard: (id: string) => Promise<void>;
+  onCreateJobFromSubtask: (
+    subtaskId: string,
+    phaseId: string,
+    subtaskName: string,
+  ) => Promise<void>;
 };
 
 export function DetailedGanttView({
@@ -103,6 +109,7 @@ export function DetailedGanttView({
   onDeleteSubtask,
   onDeleteMaterialCard,
   onReorderPhases,
+  onCreateJobFromSubtask,
 }: {
   phases: SchedulePhase[];
   tasks: ScheduleTask[];
@@ -124,6 +131,11 @@ export function DetailedGanttView({
   onDeleteSubtask: (id: string) => Promise<void>;
   onDeleteMaterialCard: (id: string) => Promise<void>;
   onReorderPhases: (reordered: SchedulePhase[]) => Promise<void>;
+  onCreateJobFromSubtask: (
+    subtaskId: string,
+    phaseId: string,
+    subtaskName: string,
+  ) => Promise<void>;
 }) {
   const role = useRole();
   const editable = canEdit(role);
@@ -191,6 +203,7 @@ export function DetailedGanttView({
     onDeleteTask,
     onDeleteSubtask,
     onDeleteMaterialCard,
+    onCreateJobFromSubtask,
   };
 
   return (
@@ -284,6 +297,7 @@ export function DetailedGanttView({
                                   <SubtaskRow
                                     key={subtask.id}
                                     subtask={subtask}
+                                    phaseId={phase.id}
                                     handlers={handlers}
                                   />
                                 ))}
@@ -597,12 +611,26 @@ function TaskRow({
 
 function SubtaskRow({
   subtask,
+  phaseId,
   handlers,
 }: {
   subtask: ScheduleSubtask;
+  phaseId: string;
   handlers: Handlers;
 }) {
   const { editable } = handlers;
+  const [creatingJob, setCreatingJob] = useState(false);
+  const [jobCreated, setJobCreated] = useState(false);
+  async function createJob() {
+    setCreatingJob(true);
+    try {
+      await handlers.onCreateJobFromSubtask(subtask.id, phaseId, subtask.name);
+      setJobCreated(true);
+      setTimeout(() => setJobCreated(false), 2500);
+    } finally {
+      setCreatingJob(false);
+    }
+  }
   return (
     <tr className="group border-b border-zinc-900/60 hover:bg-zinc-900/40">
       <td className="px-3 py-2 pl-16">
@@ -651,13 +679,35 @@ function SubtaskRow({
           className="text-zinc-400"
         />
       </td>
-      <td className="w-8 px-2 py-2 text-right">
-        {editable && (
-          <RowDeleteButton
-            label="Delete subtask"
-            onClick={() => handlers.onDeleteSubtask(subtask.id)}
-          />
-        )}
+      <td className="w-32 px-2 py-2 text-right">
+        <div className="inline-flex items-center gap-1">
+          {editable && (
+            <button
+              type="button"
+              onClick={createJob}
+              disabled={creatingJob || jobCreated}
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] transition opacity-0 group-hover:opacity-100 focus-within:opacity-100 disabled:opacity-100 ${
+                jobCreated
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+              }`}
+              title="Create a Job from this subtask"
+            >
+              <Briefcase className="h-3 w-3" />
+              {jobCreated
+                ? "Job created"
+                : creatingJob
+                  ? "Creating…"
+                  : "Create Job"}
+            </button>
+          )}
+          {editable && (
+            <RowDeleteButton
+              label="Delete subtask"
+              onClick={() => handlers.onDeleteSubtask(subtask.id)}
+            />
+          )}
+        </div>
       </td>
     </tr>
   );

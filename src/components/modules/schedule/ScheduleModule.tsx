@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BarChart3 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
   createMaterialCard,
@@ -297,6 +298,24 @@ export function ScheduleModule({ projectId }: ModuleProps) {
     }
   }
 
+  async function handleCreateJobFromSubtask(
+    subtaskId: string,
+    phaseId: string,
+    subtaskName: string,
+  ) {
+    try {
+      const { error } = await supabase.from("jobs").insert({
+        project_id: projectId,
+        title: subtaskName || "Untitled job",
+        parent_subtask_id: subtaskId,
+        parent_phase_id: phaseId,
+      });
+      if (error) throw error;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create job");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-3">
@@ -339,6 +358,7 @@ export function ScheduleModule({ projectId }: ModuleProps) {
               onDeleteSubtask={handleDeleteSubtask}
               onDeleteMaterialCard={handleDeleteMaterialCard}
               onReorderPhases={handleReorderPhases}
+              onCreateJobFromSubtask={handleCreateJobFromSubtask}
             />
           )}
           {view === "milestone" && <MilestoneView phases={phases} />}

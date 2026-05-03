@@ -1,28 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { Briefcase, ListChecks } from "lucide-react";
+import { Briefcase, CheckSquare, ListChecks } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import { TasksModule } from "@/components/modules/tasks/TasksModule";
 import { JobsSection } from "@/components/modules/jobs/JobsSection";
+import { TodoSection } from "./TodoSection";
 
-type Tab = "jobs" | "tasks";
+type Tab = "todo" | "tasks" | "jobs";
 
 export function WorkModule(props: ModuleProps) {
   const role = useRole();
   const editable = canEdit(role);
-  const [tab, setTab] = useState<Tab>("jobs");
+  const [tab, setTab] = useState<Tab>("todo");
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-1 border-b border-zinc-800">
         <TabButton
-          active={tab === "jobs"}
-          onClick={() => setTab("jobs")}
-          icon={<Briefcase className="h-3.5 w-3.5" />}
-          label="Jobs"
-          hint="Subcontractor work"
+          active={tab === "todo"}
+          onClick={() => setTab("todo")}
+          icon={<CheckSquare className="h-3.5 w-3.5" />}
+          label="To Do"
+          hint="Personal checklist"
         />
         <TabButton
           active={tab === "tasks"}
@@ -31,12 +32,22 @@ export function WorkModule(props: ModuleProps) {
           label="Tasks"
           hint="Internal team"
         />
+        <TabButton
+          active={tab === "jobs"}
+          onClick={() => setTab("jobs")}
+          icon={<Briefcase className="h-3.5 w-3.5" />}
+          label="Jobs"
+          hint="Subcontractor work"
+        />
       </div>
 
+      {tab === "todo" && (
+        <TodoSection projectId={props.projectId} editable={editable} />
+      )}
+      {tab === "tasks" && <TasksModule {...props} />}
       {tab === "jobs" && (
         <JobsSection projectId={props.projectId} editable={editable} />
       )}
-      {tab === "tasks" && <TasksModule {...props} />}
     </div>
   );
 }
