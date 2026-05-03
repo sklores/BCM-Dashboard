@@ -16,7 +16,7 @@ import type {
 } from "./types";
 
 const SCRATCH_COLUMNS =
-  "id, project_id, user_id, title, body, tagged_module, tagged_record_id, created_at, updated_at";
+  "id, project_id, user_id, title, body, tagged_module, tagged_record_id, promoted_to_message_id, created_at, updated_at";
 const MEETING_COLUMNS =
   "id, project_id, meeting_name, date, location, attendees, notes_body, status, created_at";
 const ATTENDEE_COLUMNS = "id, meeting_id, contact_id, name";

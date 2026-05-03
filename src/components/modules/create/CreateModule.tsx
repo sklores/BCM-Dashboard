@@ -281,54 +281,64 @@ function SavedTab({
   }
   return (
     <div className="overflow-x-auto rounded-md border border-zinc-800">
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full min-w-[720px] text-sm">
         <thead>
           <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
             <th className="px-3 py-2 font-medium">Title</th>
+            <th className="px-3 py-2 font-medium">Type</th>
             <th className="px-3 py-2 font-medium">Category</th>
             <th className="px-3 py-2 font-medium">Status</th>
+            <th className="px-3 py-2 font-medium">Created</th>
             <th className="px-3 py-2 font-medium">Updated</th>
             <th className="w-32 px-3 py-2"></th>
           </tr>
         </thead>
         <tbody>
-          {docs.map((d) => (
-            <tr key={d.id} className="border-b border-zinc-900">
-              <td className="px-3 py-2 text-zinc-200">{d.title}</td>
-              <td className="px-3 py-2 text-zinc-300">
-                {DOC_CATEGORY_LABEL[d.category]}
-              </td>
-              <td className="px-3 py-2">
-                <span
-                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${DOC_STATUS_STYLE[d.status]}`}
-                >
-                  {DOC_STATUS_LABEL[d.status]}
-                </span>
-              </td>
-              <td className="px-3 py-2 text-zinc-400">
-                {new Date(d.updated_at).toLocaleDateString()}
-              </td>
-              <td className="px-3 py-2 text-right">
-                <div className="inline-flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onOpen(d.id)}
-                    className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+          {docs.map((d) => {
+            const typeLabel =
+              DOC_TEMPLATES_BY_TYPE[d.doc_type]?.title ?? d.doc_type;
+            return (
+              <tr key={d.id} className="border-b border-zinc-900">
+                <td className="px-3 py-2 text-zinc-200">{d.title}</td>
+                <td className="px-3 py-2 text-zinc-300">{typeLabel}</td>
+                <td className="px-3 py-2 text-zinc-300">
+                  {DOC_CATEGORY_LABEL[d.category]}
+                </td>
+                <td className="px-3 py-2">
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${DOC_STATUS_STYLE[d.status]}`}
                   >
-                    Open
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(d.id)}
-                    className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
-                    aria-label="Delete document"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+                    {DOC_STATUS_LABEL[d.status]}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-zinc-400">
+                  {new Date(d.created_at).toLocaleDateString()}
+                </td>
+                <td className="px-3 py-2 text-zinc-400">
+                  {new Date(d.updated_at).toLocaleDateString()}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <div className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onOpen(d.id)}
+                      className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[11px] text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+                    >
+                      Open
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(d.id)}
+                      className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+                      aria-label="Delete document"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

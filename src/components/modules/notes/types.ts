@@ -64,6 +64,7 @@ export type ScratchNote = {
   body: string | null;
   tagged_module: string | null;
   tagged_record_id: string | null;
+  promoted_to_message_id: string | null;
   created_at: string;
   updated_at: string;
 };

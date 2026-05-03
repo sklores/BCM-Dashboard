@@ -177,6 +177,46 @@ export function NotesModule({ projectId }: ModuleProps) {
     }
   }
 
+  // Promote a scratch note to the Messages module as an official
+  // communication record. Inserts a row in messages with
+  // entry_type='field_note' carrying the note's title + body, then
+  // stamps scratch_notes.promoted_to_message_id so the button hides
+  // on subsequent passes.
+  async function handlePromoteNoteToMessage(n: ScratchNote) {
+    try {
+      const ins = await supabase
+        .from("messages")
+        .insert({
+          project_id: projectId,
+          entry_type: "field_note",
+          subject: n.title?.trim() || "Field note (promoted)",
+          body: n.body ?? null,
+          received_at: new Date().toISOString(),
+          tags: [],
+          priority: "normal",
+        })
+        .select("id")
+        .single();
+      if (ins.error) throw ins.error;
+      const msgId = ins.data.id as string;
+      const upd = await supabase
+        .from("scratch_notes")
+        .update({ promoted_to_message_id: msgId })
+        .eq("id", n.id);
+      if (upd.error) throw upd.error;
+      setScratch((rows) =>
+        rows.map((row) =>
+          row.id === n.id ? { ...row, promoted_to_message_id: msgId } : row,
+        ),
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to add to Messages",
+      );
+      throw err;
+    }
+  }
+
   // ----- Meeting handlers -----
 
   async function handleAddMeeting() {
@@ -445,6 +485,7 @@ export function NotesModule({ projectId }: ModuleProps) {
           onOpen={(n) => floating.openNote("scratch", n.id)}
           onDelete={handleDeleteScratchInline}
           onConvertToTask={handleConvertNoteToTask}
+          onPromoteToMessage={handlePromoteNoteToMessage}
         />
       )}
 
@@ -515,6 +556,7 @@ function ScratchSection({
   onOpen,
   onDelete,
   onConvertToTask,
+  onPromoteToMessage,
 }: {
   notes: ScratchNote[];
   editable: boolean;
@@ -522,9 +564,11 @@ function ScratchSection({
   onOpen: (n: ScratchNote) => void;
   onDelete: (id: string) => Promise<void>;
   onConvertToTask: (n: ScratchNote) => Promise<void>;
+  onPromoteToMessage: (n: ScratchNote) => Promise<void>;
 }) {
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set());
+  const [promotingId, setPromotingId] = useState<string | null>(null);
   async function handleConvert(n: ScratchNote) {
     setConvertingId(n.id);
     try {
@@ -539,6 +583,14 @@ function ScratchSection({
       }, 2500);
     } finally {
       setConvertingId(null);
+    }
+  }
+  async function handlePromote(n: ScratchNote) {
+    setPromotingId(n.id);
+    try {
+      await onPromoteToMessage(n);
+    } finally {
+      setPromotingId(null);
     }
   }
   const [search, setSearch] = useState("");
@@ -638,6 +690,28 @@ function ScratchSection({
                       : convertingId === n.id
                         ? "…"
                         : "→ Task"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePromote(n);
+                    }}
+                    disabled={
+                      promotingId === n.id || !!n.promoted_to_message_id
+                    }
+                    className={`rounded-md border px-1.5 py-0.5 text-[10px] transition opacity-0 group-hover:opacity-100 disabled:opacity-100 ${
+                      n.promoted_to_message_id
+                        ? "border-violet-500/40 bg-violet-500/10 text-violet-300"
+                        : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+                    }`}
+                    title="Promote this note to an official Messages entry"
+                  >
+                    {n.promoted_to_message_id
+                      ? "✓ In Messages"
+                      : promotingId === n.id
+                        ? "…"
+                        : "→ Messages"}
                   </button>
                   <button
                     type="button"

@@ -764,8 +764,8 @@ function NotificationsBell({ projectId }: { projectId: string }) {
             )}
             {!loading && alerts.length === 0 && (
               <div className="px-3 py-6 text-center text-xs text-zinc-500">
-                No notifications. Alerts from inspections, billing, plans, and
-                tasks will surface here.
+                No notifications. Alerts from inspections, materials, plans,
+                and schedule will surface here.
               </div>
             )}
             {!loading &&
