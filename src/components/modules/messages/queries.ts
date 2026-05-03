@@ -1,8 +1,13 @@
 import { supabase } from "@/lib/supabase";
-import type { EntryType, Message, Priority } from "./types";
+import type {
+  ContactOption,
+  EntryType,
+  Message,
+  Priority,
+} from "./types";
 
 const COLUMNS =
-  "id, project_id, from_email, from_name, subject, body, received_at, tags, entry_type, priority, follow_up_task_id, attachment_url";
+  "id, project_id, from_email, from_name, subject, body, received_at, tags, entry_type, priority, follow_up_task_id, attachment_url, contact_id, duration_minutes";
 
 export async function fetchMessages(projectId: string): Promise<Message[]> {
   const { data, error } = await supabase
@@ -61,6 +66,9 @@ export async function createManualMessage(
     from_email?: string | null;
     priority?: Priority;
     attachment_url?: string | null;
+    contact_id?: string | null;
+    duration_minutes?: number | null;
+    received_at?: string | null;
   },
 ): Promise<Message> {
   const { data, error } = await supabase
@@ -74,13 +82,27 @@ export async function createManualMessage(
       from_email: fields.from_email ?? null,
       priority: fields.priority ?? "normal",
       attachment_url: fields.attachment_url ?? null,
-      received_at: new Date().toISOString(),
+      contact_id: fields.contact_id ?? null,
+      duration_minutes: fields.duration_minutes ?? null,
+      received_at: fields.received_at ?? new Date().toISOString(),
       tags: [],
     })
     .select(COLUMNS)
     .single();
   if (error) throw error;
   return data as Message;
+}
+
+export async function fetchProjectContacts(
+  projectId: string,
+): Promise<ContactOption[]> {
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("id, first_name, last_name, email, phone")
+    .eq("project_id", projectId)
+    .order("last_name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as ContactOption[];
 }
 
 export async function updateMessagePriority(

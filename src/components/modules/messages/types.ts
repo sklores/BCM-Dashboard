@@ -38,7 +38,34 @@ export type Message = {
   priority: Priority;
   follow_up_task_id: string | null;
   attachment_url: string | null;
+  contact_id: string | null;
+  duration_minutes: number | null;
 };
+
+export type ContactOption = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+};
+
+// Strip common reply/forward prefixes off a subject so emails with the
+// same root subject collapse into a thread. Returns a stable key.
+export function normalizeSubject(s: string | null | undefined): string {
+  let out = (s ?? "").trim();
+  // Repeatedly strip leading "Re:" / "Fwd:" / "Fw:" (case-insensitive,
+  // optional spaces) until the prefix stops matching.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  let i = 0;
+  while (i < 8) {
+    const m = /^(re|fwd|fw)\s*:\s*/i.exec(out);
+    if (!m) break;
+    out = out.slice(m[0].length).trim();
+    i++;
+  }
+  return out.toLowerCase().replace(/\s+/g, " ");
+}
 
 // Keep in sync with src/app/api/messages/tag/route.ts
 export const TAG_OPTIONS = [

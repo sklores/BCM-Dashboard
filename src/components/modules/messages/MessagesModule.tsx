@@ -29,6 +29,7 @@ import {
   PRIORITY_LABEL,
   PRIORITY_STYLE,
   TAG_OPTIONS,
+  normalizeSubject,
   type EntryType,
   type Message,
   type Priority,
@@ -53,6 +54,16 @@ export function MessagesModule({ projectId }: ModuleProps) {
   const [composing, setComposing] = useState(false);
   const [priorityOnly, setPriorityOnly] = useState(false);
   const [creatingTaskFor, setCreatingTaskFor] = useState<string | null>(null);
+  const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
+
+  function toggleThread(key: string) {
+    setExpandedThreads((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +123,46 @@ export function MessagesModule({ projectId }: ModuleProps) {
       return true;
     });
   }, [messages, search, activeTags, fromDate, toDate, priorityOnly]);
+
+  // Email threading: emails with the same subject (after stripping
+  // "Re:" / "Fwd:" prefixes) collapse into one thread. Manual entries
+  // (call, field note, screenshot) always render as standalone rows.
+  const groupedThreads = useMemo(() => {
+    type Standalone = { kind: "single"; message: Message };
+    type Thread = { kind: "thread"; key: string; messages: Message[] };
+    const out: Array<Standalone | Thread> = [];
+    const threadMap = new Map<string, Message[]>();
+    for (const m of filtered) {
+      if (m.entry_type !== "email") {
+        out.push({ kind: "single", message: m });
+        continue;
+      }
+      const key = normalizeSubject(m.subject) || `__id_${m.id}`;
+      const list = threadMap.get(key) ?? [];
+      list.push(m);
+      threadMap.set(key, list);
+    }
+    for (const [key, list] of threadMap.entries()) {
+      list.sort(
+        (a, b) =>
+          new Date(b.received_at).getTime() -
+          new Date(a.received_at).getTime(),
+      );
+      if (list.length === 1) {
+        out.push({ kind: "single", message: list[0] });
+      } else {
+        out.push({ kind: "thread", key, messages: list });
+      }
+    }
+    out.sort((a, b) => {
+      const aTs =
+        a.kind === "single" ? a.message.received_at : a.messages[0].received_at;
+      const bTs =
+        b.kind === "single" ? b.message.received_at : b.messages[0].received_at;
+      return new Date(bTs).getTime() - new Date(aTs).getTime();
+    });
+    return out;
+  }, [filtered]);
 
   function toggleExpand(id: string) {
     setExpanded((prev) => {
@@ -369,20 +420,43 @@ export function MessagesModule({ projectId }: ModuleProps) {
                 No messages match these filters.
               </p>
             ) : (
-              filtered.map((m) => (
-                <MessageCard
-                  key={m.id}
-                  message={m}
-                  expanded={expanded.has(m.id)}
-                  tagging={tagging.has(m.id)}
-                  creatingTask={creatingTaskFor === m.id}
-                  onToggle={() => toggleExpand(m.id)}
-                  onAiTag={() => handleAiTag(m.id)}
-                  onSetTags={(tags) => handleSetTags(m.id, tags)}
-                  onSetPriority={(p) => handleSetPriority(m.id, p)}
-                  onFollowUp={() => handleFollowUp(m)}
-                />
-              ))
+              groupedThreads.map((group) =>
+                group.kind === "thread" ? (
+                  <ThreadGroup
+                    key={group.key}
+                    messages={group.messages}
+                    expandedThreads={expandedThreads}
+                    onToggleThread={() => toggleThread(group.key)}
+                    cardProps={{
+                      expanded,
+                      tagging,
+                      creatingTaskFor,
+                      onToggle: toggleExpand,
+                      onAiTag: handleAiTag,
+                      onSetTags: handleSetTags,
+                      onSetPriority: handleSetPriority,
+                      onFollowUp: handleFollowUp,
+                    }}
+                  />
+                ) : (
+                  <MessageCard
+                    key={group.message.id}
+                    message={group.message}
+                    expanded={expanded.has(group.message.id)}
+                    tagging={tagging.has(group.message.id)}
+                    creatingTask={creatingTaskFor === group.message.id}
+                    onToggle={() => toggleExpand(group.message.id)}
+                    onAiTag={() => handleAiTag(group.message.id)}
+                    onSetTags={(tags) =>
+                      handleSetTags(group.message.id, tags)
+                    }
+                    onSetPriority={(p) =>
+                      handleSetPriority(group.message.id, p)
+                    }
+                    onFollowUp={() => handleFollowUp(group.message)}
+                  />
+                ),
+              )
             )}
           </div>
         </>
@@ -394,6 +468,72 @@ export function MessagesModule({ projectId }: ModuleProps) {
           onCreated={(m) => setMessages((rows) => [m, ...rows])}
           onClose={() => setComposing(false)}
         />
+      )}
+    </div>
+  );
+}
+
+function ThreadGroup({
+  messages,
+  expandedThreads,
+  onToggleThread,
+  cardProps,
+}: {
+  messages: Message[];
+  expandedThreads: Set<string>;
+  onToggleThread: () => void;
+  cardProps: {
+    expanded: Set<string>;
+    tagging: Set<string>;
+    creatingTaskFor: string | null;
+    onToggle: (id: string) => void;
+    onAiTag: (id: string) => void;
+    onSetTags: (id: string, tags: string[]) => void;
+    onSetPriority: (id: string, p: Priority) => void;
+    onFollowUp: (m: Message) => void;
+  };
+}) {
+  const head = messages[0];
+  const rest = messages.slice(1);
+  const open = expandedThreads.has(head.id);
+  return (
+    <div className="rounded-md border border-blue-500/20 bg-blue-500/[.03] p-1">
+      <MessageCard
+        message={head}
+        expanded={cardProps.expanded.has(head.id)}
+        tagging={cardProps.tagging.has(head.id)}
+        creatingTask={cardProps.creatingTaskFor === head.id}
+        onToggle={() => cardProps.onToggle(head.id)}
+        onAiTag={() => cardProps.onAiTag(head.id)}
+        onSetTags={(tags) => cardProps.onSetTags(head.id, tags)}
+        onSetPriority={(p) => cardProps.onSetPriority(head.id, p)}
+        onFollowUp={() => cardProps.onFollowUp(head)}
+      />
+      <button
+        type="button"
+        onClick={onToggleThread}
+        className="ml-7 mt-1 inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[11px] text-blue-300 hover:bg-blue-500/20"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        {rest.length} earlier message{rest.length === 1 ? "" : "s"} in this thread
+      </button>
+      {open && (
+        <div className="ml-4 mt-2 space-y-2 border-l border-blue-500/30 pl-3">
+          {rest.map((m) => (
+            <MessageCard
+              key={m.id}
+              message={m}
+              expanded={cardProps.expanded.has(m.id)}
+              tagging={cardProps.tagging.has(m.id)}
+              creatingTask={cardProps.creatingTaskFor === m.id}
+              onToggle={() => cardProps.onToggle(m.id)}
+              onAiTag={() => cardProps.onAiTag(m.id)}
+              onSetTags={(tags) => cardProps.onSetTags(m.id, tags)}
+              onSetPriority={(p) => cardProps.onSetPriority(m.id, p)}
+              onFollowUp={() => cardProps.onFollowUp(m)}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

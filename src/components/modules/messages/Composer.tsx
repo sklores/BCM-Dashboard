@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Image as ImageIcon,
   Loader2,
@@ -12,12 +12,14 @@ import {
 } from "lucide-react";
 import {
   createManualMessage,
+  fetchProjectContacts,
   ocrScreenshot,
   uploadMessageAttachment,
 } from "./queries";
 import {
   ENTRY_TYPE_LABEL,
   PRIORITY_LABEL,
+  type ContactOption,
   type EntryType,
   type Message,
   type Priority,
@@ -54,6 +56,41 @@ export function MessagesComposer({
     "idle",
   );
   const [error, setError] = useState<string | null>(null);
+  // Call-log specific
+  const [contacts, setContacts] = useState<ContactOption[]>([]);
+  const [contactId, setContactId] = useState<string>("");
+  const [callDate, setCallDate] = useState<string>(
+    new Date().toISOString().slice(0, 10),
+  );
+  const [duration, setDuration] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchProjectContacts(projectId);
+        if (!cancelled) setContacts(list);
+      } catch {
+        // non-fatal — composer still works without the picker populated
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  // When the user picks a contact, prefill name + phone/email so they
+  // don't need to type them in.
+  function handleContactPick(id: string) {
+    setContactId(id);
+    if (!id) return;
+    const c = contacts.find((x) => x.id === id);
+    if (!c) return;
+    const fullName = `${c.first_name} ${c.last_name}`.trim();
+    if (fullName) setFromName(fullName);
+    if (type === "call" && c.phone) setFromEmail(c.phone);
+    if (type !== "call" && c.email) setFromEmail(c.email);
+  }
 
   async function handleUpload(f: File) {
     setError(null);
@@ -82,6 +119,14 @@ export function MessagesComposer({
     setError(null);
     setBusy("saving");
     try {
+      const durationNum =
+        type === "call" && duration.trim() !== ""
+          ? Math.max(0, Math.round(Number(duration)))
+          : null;
+      const receivedAt =
+        type === "call" && callDate
+          ? new Date(`${callDate}T12:00:00`).toISOString()
+          : null;
       const created = await createManualMessage(projectId, {
         entry_type: type,
         subject:
@@ -96,6 +141,9 @@ export function MessagesComposer({
         from_email: fromEmail || null,
         priority,
         attachment_url: uploadedUrl,
+        contact_id: type === "call" && contactId ? contactId : null,
+        duration_minutes: durationNum,
+        received_at: receivedAt,
       });
       onCreated(created);
       onClose();
@@ -161,6 +209,32 @@ export function MessagesComposer({
         </div>
 
         <div className="space-y-3">
+          {type === "call" && (
+            <label className="block text-xs">
+              <span className="mb-1 block uppercase tracking-wider text-zinc-500">
+                Contact (from Contacts)
+              </span>
+              <select
+                value={contactId}
+                onChange={(e) => handleContactPick(e.target.value)}
+                className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-sm text-zinc-100 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [color-scheme:dark]"
+              >
+                <option value="">— Pick a contact (or leave blank) —</option>
+                {contacts.map((c) => {
+                  const name = `${c.first_name} ${c.last_name}`.trim() ||
+                    c.email ||
+                    "Unnamed";
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {name}
+                      {c.phone ? ` · ${c.phone}` : c.email ? ` · ${c.email}` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          )}
+
           <div className="grid grid-cols-2 gap-2">
             <Input
               label={
@@ -180,6 +254,23 @@ export function MessagesComposer({
               type={type === "call" ? "tel" : "email"}
             />
           </div>
+
+          {type === "call" && (
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="Date of call"
+                value={callDate}
+                onChange={setCallDate}
+                type="date"
+              />
+              <Input
+                label="Duration (min)"
+                value={duration}
+                onChange={setDuration}
+                type="number"
+              />
+            </div>
+          )}
 
           <Input
             label={
