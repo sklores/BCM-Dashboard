@@ -43,7 +43,18 @@ export type Material = {
   dimensions: string | null;
   qty: number | null;
   source_url: string | null;
+  expected_delivery_date: string | null;
+  delivery_delay_alerted_at: string | null;
 };
+
+export function isMaterialDelayed(m: {
+  status: DetailedStatus;
+  expected_delivery_date: string | null;
+}): boolean {
+  if (!m.expected_delivery_date) return false;
+  if (m.status === "delivered" || m.status === "installed") return false;
+  return m.expected_delivery_date < new Date().toISOString().slice(0, 10);
+}
 
 export type MaterialPhoto = {
   id: string;

@@ -6,6 +6,7 @@ import {
   Link as LinkIcon,
   Loader2,
   Map as MapIcon,
+  Pencil,
   Maximize2,
   MessageSquare,
   Minimize2,
@@ -82,6 +83,7 @@ import {
   type RfiPatch,
   type SubmittalPatch,
 } from "./queries";
+import { DrawingMarkupOverlay } from "./DrawingMarkupOverlay";
 
 type Section =
   | "drawings"
@@ -1877,6 +1879,7 @@ function PdfViewer({
   onClose: () => void;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
+  const [markupMode, setMarkupMode] = useState(false);
 
   // Sync state when the user exits browser fullscreen via Esc / browser UI.
   useEffect(() => {
@@ -1957,6 +1960,17 @@ function PdfViewer({
             {fullscreen ? "Exit full screen" : "Full screen"}
           </button>
           {drawing.pdf_url && (
+            <button
+              type="button"
+              onClick={() => setMarkupMode(true)}
+              className="flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+              title="Open markup canvas (pen / arrow / cloud / text / rect with zoom)"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Markup
+            </button>
+          )}
+          {drawing.pdf_url && (
             <a
               href={drawing.pdf_url}
               target="_blank"
@@ -1992,6 +2006,15 @@ function PdfViewer({
           )}
         </div>
       </div>
+      {markupMode && (
+        <DrawingMarkupOverlay
+          drawing={drawing}
+          onClose={() => setMarkupMode(false)}
+          onSaved={() => {
+            setMarkupMode(false);
+          }}
+        />
+      )}
     </div>
   );
 }

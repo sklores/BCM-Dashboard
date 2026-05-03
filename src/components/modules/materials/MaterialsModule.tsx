@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ExternalLink,
+  FileDown,
   Globe,
   ImagePlus,
   Loader2,
@@ -20,6 +21,7 @@ import {
   deleteMaterialPhoto,
   fetchMaterialPhotos,
   fetchMaterials,
+  syncDeliveryDelayAlerts,
   updateMaterial,
   uploadMaterialPhoto,
   type MaterialPatch,
@@ -28,6 +30,7 @@ import {
   DETAILED_STATUSES,
   DETAILED_STATUS_LABEL,
   DETAILED_STATUS_STYLE,
+  isMaterialDelayed,
   type DetailedStatus,
   type Material,
   type MaterialPhoto,
@@ -97,7 +100,9 @@ export function MaterialsModule({ projectId }: ModuleProps) {
     setError(null);
     (async () => {
       try {
-        const rows = await fetchMaterials(projectId);
+        const fresh = await fetchMaterials(projectId);
+        if (cancelled) return;
+        const rows = await syncDeliveryDelayAlerts(projectId, fresh);
         if (cancelled) return;
         setMaterials(rows);
         const photoRows = await fetchMaterialPhotos(rows.map((r) => r.id));
@@ -600,6 +605,7 @@ function DetailedListSection({
               <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
                 <th className="px-3 py-2 font-medium">Item</th>
                 <th className="w-32 px-3 py-2 font-medium">Status</th>
+                <th className="w-36 px-3 py-2 font-medium">Expected delivery</th>
                 <th className="px-3 py-2 font-medium">Dimensions</th>
                 <th className="w-20 px-3 py-2 font-medium">Qty</th>
                 <th className="px-3 py-2 font-medium">Supplier</th>
@@ -614,12 +620,24 @@ function DetailedListSection({
                   className="border-b border-zinc-900 hover:bg-zinc-900/40"
                 >
                   <td className="px-3 py-2">
-                    <div className="text-zinc-100">{m.product_name}</div>
-                    {m.manufacturer && (
-                      <div className="text-[11px] text-zinc-500">
-                        {m.manufacturer}
+                    <div className="flex items-center gap-2">
+                      <div>
+                        <div className="text-zinc-100">{m.product_name}</div>
+                        {m.manufacturer && (
+                          <div className="text-[11px] text-zinc-500">
+                            {m.manufacturer}
+                          </div>
+                        )}
                       </div>
-                    )}
+                      {isMaterialDelayed(m) && (
+                        <span
+                          className="inline-flex items-center rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-300"
+                          title="Past expected delivery date"
+                        >
+                          Delayed
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2">
                     <select
@@ -628,6 +646,13 @@ function DetailedListSection({
                       onChange={(e) =>
                         onUpdate(m.id, {
                           status: e.target.value as DetailedStatus,
+                          // Clear the alerted flag when status reaches a
+                          // non-delayed state so a future re-delay re-alerts.
+                          delivery_delay_alerted_at:
+                            e.target.value === "delivered" ||
+                            e.target.value === "installed"
+                              ? null
+                              : m.delivery_delay_alerted_at,
                         })
                       }
                       className={`rounded-full border px-2 py-0.5 text-[11px] outline-none [color-scheme:dark] ${DETAILED_STATUS_STYLE[m.status]}`}
@@ -638,6 +663,20 @@ function DetailedListSection({
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      type="date"
+                      value={m.expected_delivery_date ?? ""}
+                      disabled={!editable}
+                      onChange={(e) =>
+                        onUpdate(m.id, {
+                          expected_delivery_date: e.target.value || null,
+                          delivery_delay_alerted_at: null,
+                        })
+                      }
+                      className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                    />
                   </td>
                   <td className="px-3 py-2">
                     <EditableText
@@ -767,19 +806,32 @@ function FinishScheduleSection({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      {materials.map((m) => (
-        <FinishCard
-          key={m.id}
-          material={m}
-          photos={photos.filter((p) => p.material_id === m.id)}
-          editable={editable}
-          onUpdate={onUpdate}
-          onUncheck={onUncheck}
-          onAddPhoto={onAddPhoto}
-          onDeletePhoto={onDeletePhoto}
-        />
-      ))}
+    <div className="space-y-4">
+      <div className="flex justify-end print:hidden">
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+          title="Open the browser print dialog — Save as PDF"
+        >
+          <FileDown className="h-3.5 w-3.5" />
+          Export PDF
+        </button>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2 print:grid-cols-1 print:gap-6">
+        {materials.map((m) => (
+          <FinishCard
+            key={m.id}
+            material={m}
+            photos={photos.filter((p) => p.material_id === m.id)}
+            editable={editable}
+            onUpdate={onUpdate}
+            onUncheck={onUncheck}
+            onAddPhoto={onAddPhoto}
+            onDeletePhoto={onDeletePhoto}
+          />
+        ))}
+      </div>
     </div>
   );
 }

@@ -145,7 +145,7 @@ export async function fetchMaterialCatalog(
 ): Promise<MaterialCatalogOption[]> {
   const { data, error } = await supabase
     .from("materials")
-    .select("id, product_name")
+    .select("id, product_name, status, expected_delivery_date")
     .eq("project_id", projectId)
     .order("product_name", { ascending: true });
   if (error) throw error;

@@ -62,6 +62,8 @@ export type ProjectTeamOption = {
 export type MaterialCatalogOption = {
   id: string;
   product_name: string;
+  status: string | null;
+  expected_delivery_date: string | null;
 };
 
 export type ScheduleMilestone = {

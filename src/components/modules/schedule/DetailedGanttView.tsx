@@ -729,14 +729,36 @@ function MaterialCardRow({
   handlers: Handlers;
 }) {
   const { editable, materialCatalog } = handlers;
+  const linked = card.material_id
+    ? materialCatalog.find((m) => m.id === card.material_id)
+    : null;
+  const today = new Date().toISOString().slice(0, 10);
+  const linkedDelayed =
+    !!linked &&
+    !!linked.expected_delivery_date &&
+    linked.expected_delivery_date < today &&
+    linked.status !== "delivered" &&
+    linked.status !== "installed";
   return (
-    <tr className="group border-b border-zinc-900/60 bg-zinc-900/20 hover:bg-zinc-900/50">
+    <tr
+      className={`group border-b border-zinc-900/60 bg-zinc-900/20 hover:bg-zinc-900/50 ${
+        linkedDelayed ? "ring-1 ring-inset ring-red-500/30" : ""
+      }`}
+    >
       <td colSpan={TOTAL_COLS - 1} className="px-3 py-2 pl-16">
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-600/10 px-2 py-0.5 text-blue-400">
             <Package className="h-3 w-3" />
             Material
           </span>
+          {linkedDelayed && (
+            <span
+              className="inline-flex items-center rounded-full border border-red-500/40 bg-red-500/10 px-2 py-0.5 text-[10px] font-medium text-red-300"
+              title="Linked material is past expected delivery"
+            >
+              Delayed material
+            </span>
+          )}
           <PickerCell
             value={card.material_id}
             editable={editable}

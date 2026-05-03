@@ -239,3 +239,26 @@ html.bcm-light .border-blue-500\/30 {
 html.bcm-light main.bcm-content [class*="border-dashed"] {
   border-color: var(--bcm-border) !important;
 }
+
+/* --- Print stylesheet ---
+   Used by Materials → Finish Schedule → Export PDF (window.print). Hide
+   sidebar / topbar / chrome and force a clean white page so the user's
+   browser "Save as PDF" produces a usable handout. */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .bcm-sidebar,
+  header,
+  nav,
+  aside,
+  .print\:hidden {
+    display: none !important;
+  }
+  main.bcm-content {
+    padding: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+}
