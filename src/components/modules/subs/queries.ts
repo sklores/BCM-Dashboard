@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { ProjectSub, Sub } from "./types";
 
 const SUB_COLUMNS =
-  "id, name, trade, contact_name, contact_email, contact_phone, license_number, notes";
+  "id, name, trade, contact_name, contact_email, contact_phone, license_number, notes, scope_of_work";
 
 export async function fetchSubs(): Promise<Sub[]> {
   const { data, error } = await supabase

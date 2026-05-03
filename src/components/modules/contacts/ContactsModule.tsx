@@ -890,16 +890,35 @@ function CompanyDetail({
             </div>
           </div>
         </div>
-        {editable && (
-          <button
-            type="button"
-            onClick={() => onDelete(company.id)}
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
-            aria-label="Delete company"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {(company.category === "subs_trade" ||
+            company.category === "subs_mep") && (
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent("bcm-navigate", {
+                    detail: { moduleKey: "subs", subName: company.company_name },
+                  }),
+                );
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400"
+              title="Open profile in Subs module"
+            >
+              Open in Subs
+            </button>
+          )}
+          {editable && (
+            <button
+              type="button"
+              onClick={() => onDelete(company.id)}
+              className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
+              aria-label="Delete company"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

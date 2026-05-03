@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink, Loader2, MessageSquare } from "lucide-react";
+import { updateSub } from "./queries";
 import {
   fetchContractorDetail,
   fmtDate,
@@ -14,19 +15,21 @@ type Tab =
   | "overview"
   | "jobs"
   | "materials"
-  | "paperwork"
+  | "documents"
   | "billing"
   | "schedule"
-  | "plans";
+  | "plans"
+  | "communication";
 
 const TABS: [Tab, string][] = [
   ["overview", "Overview"],
   ["jobs", "Jobs"],
   ["materials", "Materials"],
-  ["paperwork", "Paperwork"],
+  ["documents", "Documents"],
   ["billing", "Billing"],
   ["schedule", "Schedule"],
   ["plans", "Plans"],
+  ["communication", "Communication"],
 ];
 
 export function ContractorDetailPage({
@@ -67,12 +70,11 @@ export function ContractorDetailPage({
     overview: null,
     jobs: detail?.jobs.length ?? null,
     materials: detail?.materials.length ?? null,
-    paperwork:
-      (detail?.agreements.length ?? 0) + (detail?.change_orders.length ?? 0) ||
-      null,
+    documents: detail?.documents.length ?? null,
     billing: detail?.requisitions.length ?? null,
     schedule: detail?.schedule_tasks.length ?? null,
     plans: detail?.plan_link ? 1 : null,
+    communication: detail?.communications.length ?? null,
   };
 
   return (
@@ -84,7 +86,7 @@ export function ContractorDetailPage({
           className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 hover:border-blue-500 hover:text-blue-400"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Contractors
+          Subs
         </button>
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-semibold text-zinc-100">
@@ -134,13 +136,16 @@ export function ContractorDetailPage({
 
       {!loading && !error && detail && (
         <>
-          {tab === "overview" && <OverviewTab sub={sub} detail={detail} />}
+          {tab === "overview" && (
+            <OverviewTab sub={sub} detail={detail} subId={sub.id} />
+          )}
           {tab === "jobs" && <JobsTab detail={detail} />}
           {tab === "materials" && <MaterialsTab detail={detail} />}
-          {tab === "paperwork" && <PaperworkTab detail={detail} />}
+          {tab === "documents" && <DocumentsTab detail={detail} />}
           {tab === "billing" && <BillingTab detail={detail} />}
           {tab === "schedule" && <ScheduleTab detail={detail} />}
           {tab === "plans" && <PlansTab detail={detail} />}
+          {tab === "communication" && <CommunicationTab detail={detail} />}
         </>
       )}
     </div>
@@ -175,10 +180,30 @@ function Empty({ msg }: { msg: string }) {
 function OverviewTab({
   sub,
   detail,
+  subId,
 }: {
   sub: Sub;
   detail: ContractorDetail;
+  subId: string;
 }) {
+  const [scope, setScope] = useState(sub.scope_of_work ?? "");
+  const [savingScope, setSavingScope] = useState(false);
+  const [scopeError, setScopeError] = useState<string | null>(null);
+  useEffect(() => {
+    setScope(sub.scope_of_work ?? "");
+  }, [sub.scope_of_work]);
+  async function commitScope() {
+    if (scope === (sub.scope_of_work ?? "")) return;
+    setSavingScope(true);
+    setScopeError(null);
+    try {
+      await updateSub(subId, { scope_of_work: scope || null });
+    } catch (err) {
+      setScopeError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSavingScope(false);
+    }
+  }
   const totalContract = detail.agreements.reduce(
     (s, a) => s + (Number(a.contract_value) || 0),
     0,
@@ -194,6 +219,30 @@ function OverviewTab({
 
   return (
     <div className="space-y-5">
+      <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-xs uppercase tracking-wider text-zinc-500">
+            Scope of Work
+          </h3>
+          {savingScope && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500">
+              <Loader2 className="h-3 w-3 animate-spin" /> Saving…
+            </span>
+          )}
+        </div>
+        <textarea
+          value={scope}
+          onChange={(e) => setScope(e.target.value)}
+          onBlur={commitScope}
+          placeholder="Describe what this contractor is doing on the project…"
+          rows={4}
+          className="w-full resize-y rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        />
+        {scopeError && (
+          <p className="mt-1 text-xs text-red-400">{scopeError}</p>
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <Card label="Contract value" value={fmtUsd(totalContract)} />
         <Card label="Change orders" value={fmtUsd(totalCo)} />
@@ -328,120 +377,93 @@ function MaterialsTab({ detail }: { detail: ContractorDetail }) {
   );
 }
 
-function PaperworkTab({ detail }: { detail: ContractorDetail }) {
-  if (
-    detail.agreements.length === 0 &&
-    detail.change_orders.length === 0
-  )
+function DocumentsTab({ detail }: { detail: ContractorDetail }) {
+  if (detail.documents.length === 0)
     return (
-      <Empty msg="No agreements or change orders. Generate a Subcontractor Agreement from Paperwork to get started." />
+      <Empty msg="No documents tied to this contractor yet. Subcontractor agreements, change orders, and uploaded drawings tagged to them will appear here." />
     );
-
+  const sourceLabel: Record<string, string> = {
+    agreement: "Agreement",
+    change_order: "Change order",
+    drawing: "Drawing",
+  };
   return (
-    <div className="space-y-5">
-      <section className="space-y-2">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-500">
-          Subcontractor agreements
-        </h3>
-        {detail.agreements.length === 0 ? (
-          <p className="text-sm text-zinc-500">No agreements.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-md border border-zinc-800">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
-                  <th className="px-3 py-2 font-medium">Contract #</th>
-                  <th className="px-3 py-2 font-medium">Trade</th>
-                  <th className="px-3 py-2 font-medium">Value</th>
-                  <th className="px-3 py-2 font-medium">Start</th>
-                  <th className="px-3 py-2 font-medium">Completion</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                  <th className="px-3 py-2 font-medium">PDF</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.agreements.map((a) => (
-                  <tr key={a.id} className="border-b border-zinc-900">
-                    <td className="px-3 py-2 text-zinc-200">
-                      {a.contract_number ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">
-                      {a.trade ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">
-                      {fmtUsd(a.contract_value)}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">
-                      {fmtDate(a.start_date)}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">
-                      {fmtDate(a.completion_date)}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">{a.status}</td>
-                    <td className="px-3 py-2 text-zinc-300">
-                      {a.pdf_url ? (
-                        <a
-                          href={a.pdf_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-blue-400 hover:underline"
-                        >
-                          Open <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="space-y-2">
-        <h3 className="text-xs uppercase tracking-wider text-zinc-500">
-          Change orders
-        </h3>
-        {detail.change_orders.length === 0 ? (
-          <p className="text-sm text-zinc-500">No change orders.</p>
-        ) : (
-          <div className="overflow-x-auto rounded-md border border-zinc-800">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
-                  <th className="px-3 py-2 font-medium">CO #</th>
-                  <th className="px-3 py-2 font-medium">Date</th>
-                  <th className="px-3 py-2 font-medium">Description</th>
-                  <th className="px-3 py-2 font-medium">Amount</th>
-                  <th className="px-3 py-2 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail.change_orders.map((c) => (
-                  <tr key={c.id} className="border-b border-zinc-900">
-                    <td className="px-3 py-2 text-zinc-200">
-                      {c.co_number ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">
-                      {fmtDate(c.co_date)}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">
-                      {c.description ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">
-                      {fmtUsd(c.amount)}
-                    </td>
-                    <td className="px-3 py-2 text-zinc-300">{c.status}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+    <div className="overflow-x-auto rounded-md border border-zinc-800">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead>
+          <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
+            <th className="px-3 py-2 font-medium">Type</th>
+            <th className="px-3 py-2 font-medium">Document</th>
+            <th className="px-3 py-2 font-medium">Date</th>
+            <th className="px-3 py-2 font-medium">Detail</th>
+            <th className="px-3 py-2 font-medium">PDF</th>
+          </tr>
+        </thead>
+        <tbody>
+          {detail.documents.map((d) => (
+            <tr key={d.id} className="border-b border-zinc-900">
+              <td className="px-3 py-2 text-zinc-300">
+                {sourceLabel[d.source] ?? d.source}
+              </td>
+              <td className="px-3 py-2 text-zinc-200">{d.label}</td>
+              <td className="px-3 py-2 text-zinc-300">{fmtDate(d.date)}</td>
+              <td className="px-3 py-2 text-zinc-400">{d.detail}</td>
+              <td className="px-3 py-2 text-zinc-300">
+                {d.url ? (
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-blue-400 hover:underline"
+                  >
+                    Open <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
+  );
+}
+
+function CommunicationTab({ detail }: { detail: ContractorDetail }) {
+  if (detail.communications.length === 0)
+    return (
+      <Empty msg="No communications yet. Inbound emails from this contractor's address, plus notes tagged to this sub, will surface here." />
+    );
+  return (
+    <ul className="space-y-2">
+      {detail.communications.map((c) => (
+        <li
+          key={c.id}
+          className="rounded-md border border-zinc-800 bg-zinc-900/40 p-3"
+        >
+          <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+            <span className="inline-flex items-center gap-1.5">
+              <MessageSquare className="h-3 w-3" />
+              {c.source === "message" ? "Message" : "Note"}
+              {c.entry_type ? ` · ${c.entry_type}` : ""}
+              {c.priority && c.priority !== "normal"
+                ? ` · ${c.priority}`
+                : ""}
+            </span>
+            <span>{fmtDate(c.ts)}</span>
+          </div>
+          <div className="text-sm font-medium text-zinc-100">
+            {c.subject || "—"}
+          </div>
+          {c.preview && (
+            <p className="mt-1 line-clamp-3 text-xs text-zinc-400">
+              {c.preview}
+            </p>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 

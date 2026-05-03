@@ -80,6 +80,24 @@ export function SubsModule({ projectId }: ModuleProps) {
     };
   }, [projectId]);
 
+  // Open a sub by name when Contacts dispatches `bcm-navigate` with subName.
+  // Backwards-compatible bridge between the two modules — clicking
+  // "Open in Subs" on a Subs-Trade or Subs-MEP company in Contacts jumps
+  // straight to that sub's profile.
+  useEffect(() => {
+    function onNavigate(e: Event) {
+      const detail = (e as CustomEvent<{ moduleKey?: string; subName?: string }>)
+        .detail;
+      if (detail?.moduleKey !== "subs" || !detail.subName) return;
+      const target = subs.find(
+        (s) => s.name.trim().toLowerCase() === detail.subName!.trim().toLowerCase(),
+      );
+      if (target) setOpenSubId(target.id);
+    }
+    window.addEventListener("bcm-navigate", onNavigate);
+    return () => window.removeEventListener("bcm-navigate", onNavigate);
+  }, [subs]);
+
   // Subs currently linked to this project (the main list).
   const projectLinkedSubs = useMemo(() => {
     const linkedIds = new Set(projectSubs.map((l) => l.sub_id));

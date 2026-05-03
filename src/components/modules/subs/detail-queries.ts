@@ -69,6 +69,25 @@ export type ContractorJob = {
   scope: string | null;
 };
 
+export type ContractorMessage = {
+  id: string;
+  source: "message" | "note";
+  ts: string;
+  subject: string;
+  preview: string;
+  entry_type?: string;
+  priority?: string;
+};
+
+export type ContractorDocument = {
+  id: string;
+  source: "agreement" | "change_order" | "drawing";
+  label: string;
+  detail: string;
+  url: string | null;
+  date: string | null;
+};
+
 export type ContractorDetail = {
   source_extraction_id: string | null;
   source_drawing_id: string | null;
@@ -79,16 +98,18 @@ export type ContractorDetail = {
   schedule_tasks: ContractorScheduleTask[];
   jobs: ContractorJob[];
   plan_link: ContractorPlanLink | null;
+  communications: ContractorMessage[];
+  documents: ContractorDocument[];
 };
 
 export async function fetchContractorDetail(
   projectId: string,
   subId: string,
 ): Promise<ContractorDetail> {
-  // 1. Fetch the sub row to get source pointers (added by migration 20260426000001).
+  // 1. Fetch the sub row to get source pointers + email for filtering.
   const subRes = await supabase
     .from("subs")
-    .select("source_extraction_id, source_drawing_id")
+    .select("contact_email, name, source_extraction_id, source_drawing_id")
     .eq("id", subId)
     .maybeSingle();
   if (subRes.error) throw subRes.error;
@@ -96,6 +117,8 @@ export async function fetchContractorDetail(
     (subRes.data?.source_extraction_id as string | null) ?? null;
   const source_drawing_id =
     (subRes.data?.source_drawing_id as string | null) ?? null;
+  const subEmail = (subRes.data?.contact_email as string | null) ?? null;
+  const subName = (subRes.data?.name as string | null) ?? null;
 
   // 2. Materials (project-scoped, assigned to this sub).
   const materialsRes = await supabase
@@ -221,6 +244,102 @@ export async function fetchContractorDetail(
     }
   }
 
+  // 9. Communications: messages from the sub's email + scratch_notes
+  // tagged to this sub_id via tagged_module/tagged_record_id.
+  const communications: ContractorMessage[] = [];
+  if (subEmail) {
+    const msgRes = await supabase
+      .from("messages")
+      .select("id, subject, body, received_at, entry_type, priority")
+      .eq("project_id", projectId)
+      .ilike("from_email", subEmail)
+      .order("received_at", { ascending: false })
+      .limit(50);
+    if (!msgRes.error) {
+      for (const m of msgRes.data ?? []) {
+        communications.push({
+          id: m.id as string,
+          source: "message",
+          ts: (m.received_at as string) ?? "",
+          subject: (m.subject as string | null) ?? "(no subject)",
+          preview: ((m.body as string | null) ?? "").slice(0, 200),
+          entry_type: (m.entry_type as string | null) ?? undefined,
+          priority: (m.priority as string | null) ?? undefined,
+        });
+      }
+    }
+  }
+  const noteRes = await supabase
+    .from("scratch_notes")
+    .select("id, content, created_at, note_type")
+    .eq("project_id", projectId)
+    .eq("tagged_module", "subs")
+    .eq("tagged_record_id", subId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (!noteRes.error) {
+    for (const n of noteRes.data ?? []) {
+      communications.push({
+        id: n.id as string,
+        source: "note",
+        ts: (n.created_at as string) ?? "",
+        subject:
+          (n.note_type as string | null)?.replace(/_/g, " ") ?? "Note",
+        preview: ((n.content as string | null) ?? "").slice(0, 200),
+      });
+    }
+  }
+  communications.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+
+  // 10. Documents: agreements + change orders + plans uploads tied to sub.
+  const documents: ContractorDocument[] = [];
+  for (const a of agreementsRes.data ?? []) {
+    documents.push({
+      id: `agr-${a.id}`,
+      source: "agreement",
+      label: `Subcontractor agreement ${a.contract_number ?? ""}`.trim(),
+      detail: `${a.trade ?? ""} · ${a.status ?? ""}`.replace(/^ · | · $/g, ""),
+      url: (a.pdf_url as string | null) ?? null,
+      date: (a.start_date as string | null) ?? null,
+    });
+  }
+  for (const c of coRes.data ?? []) {
+    documents.push({
+      id: `co-${c.id}`,
+      source: "change_order",
+      label: `Change order #${c.co_number ?? "—"}`,
+      detail: ((c.description as string | null) ?? "").slice(0, 120),
+      url: null,
+      date: (c.co_date as string | null) ?? null,
+    });
+  }
+  if (subName) {
+    // Drawings uploaded by anyone with the sub's name in upload_verified_by.
+    const drawRes = await supabase
+      .from("drawings")
+      .select("id, drawing_number, title, pdf_url, upload_verified_date, created_at")
+      .eq("project_id", projectId)
+      .ilike("upload_verified_by", subName)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (!drawRes.error) {
+      for (const d of drawRes.data ?? []) {
+        documents.push({
+          id: `dwg-${d.id}`,
+          source: "drawing",
+          label: `${d.drawing_number ?? ""} ${d.title ?? "Drawing"}`.trim(),
+          detail: "Plans upload",
+          url: (d.pdf_url as string | null) ?? null,
+          date:
+            (d.upload_verified_date as string | null) ??
+            (d.created_at as string | null) ??
+            null,
+        });
+      }
+    }
+  }
+  documents.sort((a, b) => ((a.date ?? "") < (b.date ?? "") ? 1 : -1));
+
   return {
     source_extraction_id,
     source_drawing_id,
@@ -231,6 +350,8 @@ export async function fetchContractorDetail(
     schedule_tasks,
     jobs,
     plan_link,
+    communications,
+    documents,
   };
 }
 

@@ -7,6 +7,7 @@ export type Sub = {
   contact_phone: string | null;
   license_number: string | null;
   notes: string | null;
+  scope_of_work: string | null;
 };
 
 export type ProjectSub = {
