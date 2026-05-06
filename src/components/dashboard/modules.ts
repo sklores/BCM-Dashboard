@@ -1,31 +1,36 @@
 import type { ComponentType } from "react";
 import {
   BarChart3,
-  FilePlus,
+  CalendarDays,
   Image as ImageIcon,
   Inbox,
   ListChecks,
-  Map,
   Package,
-  ScrollText,
   StickyNote,
   Truck,
   Users,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { CalendarModule } from "@/components/modules/calendar/CalendarModule";
 import { ContactsModule } from "@/components/modules/contacts/ContactsModule";
-import { CreateModule } from "@/components/modules/create/CreateModule";
 import { MaterialsModule } from "@/components/modules/materials/MaterialsModule";
 import { MessagesModule } from "@/components/modules/messages/MessagesModule";
 import { NotesModule } from "@/components/modules/notes/NotesModule";
-import { PermitsModule } from "@/components/modules/permits/PermitsModule";
 import { PhotosModule } from "@/components/modules/photos/PhotosModule";
-import { PlansModule } from "@/components/modules/plans/PlansModule";
 import { ScheduleModule } from "@/components/modules/schedule/ScheduleModule";
 import { SubsModule } from "@/components/modules/subs/SubsModule";
 import { BudgetModule } from "@/components/modules/budget/BudgetModule";
 import { WorkModule } from "@/components/modules/work/WorkModule";
+
+// MVP-hidden modules — implementations stay in the repo for re-enable
+// later. To restore, uncomment the import and the entry in `modules`
+// below. Plans, Permits, and Create are full features; Calendar
+// replaced their slot in the sidebar for the MVP.
+// import { PlansModule } from "@/components/modules/plans/PlansModule";
+// import { PermitsModule } from "@/components/modules/permits/PermitsModule";
+// import { CreateModule } from "@/components/modules/create/CreateModule";
+// (Map, ScrollText, FilePlus icons unused while those modules are hidden.)
 
 export type ModuleProps = {
   projectId: string;
@@ -40,13 +45,9 @@ export type ModuleDef = {
   Component: ComponentType<ModuleProps>;
 };
 
-// 12-module target spec. Order is intentional.
-//   - Reports / Estimating / Paperwork / Calendar / Billing dropped from
-//     the sidebar (some of their tables remain in the DB for now).
-//   - "Contractors" sidebar label is now "Subs".
-//   - "Tasks" key is reused for the Work module so saved localStorage
-//     orderings keep working.
-//   - "Create" (#12) is currently a placeholder — built out in Phase H.
+// MVP sidebar. Plans / Permits / Create are temporarily hidden — their
+// implementations stay in src/ for re-enable later. Calendar slots in
+// (with a Feed tab for the activity-bus / alerts table).
 export const modules: ModuleDef[] = [
   { key: "contacts",  label: "Contacts",  icon: Users,       Component: ContactsModule  },
   { key: "subs",      label: "Subs",      icon: Truck,       Component: SubsModule      },
@@ -56,8 +57,6 @@ export const modules: ModuleDef[] = [
   { key: "messages",  label: "Messages",  icon: Inbox,       Component: MessagesModule  },
   { key: "schedule",  label: "Schedule",  icon: BarChart3,   Component: ScheduleModule  },
   { key: "budget",    label: "Budget",    icon: Wallet,      Component: BudgetModule    },
-  { key: "plans",     label: "Plans",     icon: Map,         Component: PlansModule     },
-  { key: "permits",   label: "Permits",   icon: ScrollText,  Component: PermitsModule   },
+  { key: "calendar",  label: "Calendar",  icon: CalendarDays, Component: CalendarModule },
   { key: "tasks",     label: "Work",      icon: ListChecks,  Component: WorkModule      },
-  { key: "create",    label: "Create",    icon: FilePlus,    Component: CreateModule    },
 ];
