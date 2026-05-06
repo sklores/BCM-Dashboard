@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Plus, Smartphone, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type Todo = {
@@ -219,7 +219,8 @@ export function TodoSection({
             <TodoRow
               key={t.id}
               todo={t}
-              editable={editable && t.device_id === deviceId}
+              editable={editable}
+              isMine={t.device_id === deviceId}
               onToggle={handleToggle}
               onEdit={handleEdit}
               onDelete={handleDelete}
@@ -234,7 +235,8 @@ export function TodoSection({
             <TodoRow
               key={t.id}
               todo={t}
-              editable={editable && t.device_id === deviceId}
+              editable={editable}
+              isMine={t.device_id === deviceId}
               onToggle={handleToggle}
               onEdit={handleEdit}
               onDelete={handleDelete}
@@ -249,18 +251,21 @@ export function TodoSection({
 function TodoRow({
   todo,
   editable,
+  isMine,
   onToggle,
   onEdit,
   onDelete,
 }: {
   todo: Todo;
   editable: boolean;
+  isMine: boolean;
   onToggle: (id: string, done: boolean) => Promise<void>;
   onEdit: (id: string, title: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(todo.title);
   useEffect(() => setDraft(todo.title), [todo.title]);
+  const titleEditable = editable && isMine;
   return (
     <li className="group flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-1.5">
       <input
@@ -270,10 +275,19 @@ function TodoRow({
         onChange={(e) => onToggle(todo.id, e.target.checked)}
         className="h-3.5 w-3.5"
       />
+      {!isMine && (
+        <Smartphone
+          className="h-3.5 w-3.5 flex-shrink-0 text-blue-400"
+          aria-label="Shared from another device"
+          aria-hidden={false}
+        >
+          <title>Shared from another device (likely mobile)</title>
+        </Smartphone>
+      )}
       <input
         type="text"
         value={draft}
-        disabled={!editable}
+        disabled={!titleEditable}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
           if (draft.trim() && draft !== todo.title) onEdit(todo.id, draft.trim());
@@ -290,7 +304,7 @@ function TodoRow({
           todo.done ? "text-zinc-500 line-through" : "text-zinc-100"
         }`}
       />
-      {editable && (
+      {editable && isMine && (
         <button
           type="button"
           onClick={() => onDelete(todo.id)}
