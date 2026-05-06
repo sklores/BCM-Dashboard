@@ -67,7 +67,9 @@ export function normalizeSubject(s: string | null | undefined): string {
   return out.toLowerCase().replace(/\s+/g, " ");
 }
 
-// Keep in sync with src/app/api/messages/tag/route.ts
+// Single source of truth — also imported by src/app/api/messages/tag/route.ts.
+// Keep this aligned with the modules currently in modules.ts so the AI
+// tagger only ever returns chips that map to a real navigable destination.
 export const TAG_OPTIONS = [
   "budget",
   "client",
@@ -77,13 +79,10 @@ export const TAG_OPTIONS = [
   "team",
   "tasks",
   "photos",
-  "plans",
-  "permits",
   "notes",
   "calendar",
-  "estimating",
-  "contracts",
-  "reports",
+  "messages",
+  "contacts",
 ] as const;
 
 export type MessageTag = (typeof TAG_OPTIONS)[number];

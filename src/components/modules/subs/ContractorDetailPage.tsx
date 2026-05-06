@@ -16,7 +16,6 @@ type Tab =
   | "jobs"
   | "materials"
   | "documents"
-  | "billing"
   | "schedule"
   | "plans"
   | "communication";
@@ -26,7 +25,6 @@ const TABS: [Tab, string][] = [
   ["jobs", "Jobs"],
   ["materials", "Materials"],
   ["documents", "Documents"],
-  ["billing", "Billing"],
   ["schedule", "Schedule"],
   ["plans", "Plans"],
   ["communication", "Communication"],
@@ -71,7 +69,6 @@ export function ContractorDetailPage({
     jobs: detail?.jobs.length ?? null,
     materials: detail?.materials.length ?? null,
     documents: detail?.documents.length ?? null,
-    billing: detail?.requisitions.length ?? null,
     schedule: detail?.schedule_tasks.length ?? null,
     plans: detail?.plan_link ? 1 : null,
     communication: detail?.communications.length ?? null,
@@ -142,7 +139,6 @@ export function ContractorDetailPage({
           {tab === "jobs" && <JobsTab detail={detail} />}
           {tab === "materials" && <MaterialsTab detail={detail} />}
           {tab === "documents" && <DocumentsTab detail={detail} />}
-          {tab === "billing" && <BillingTab detail={detail} />}
           {tab === "schedule" && <ScheduleTab detail={detail} />}
           {tab === "plans" && <PlansTab detail={detail} />}
           {tab === "communication" && <CommunicationTab detail={detail} />}
@@ -204,18 +200,11 @@ function OverviewTab({
       setSavingScope(false);
     }
   }
-  const totalContract = detail.agreements.reduce(
-    (s, a) => s + (Number(a.contract_value) || 0),
-    0,
-  );
-  const totalCo = detail.change_orders.reduce(
-    (s, c) => s + (Number(c.amount) || 0),
-    0,
-  );
-  const totalBilled = detail.requisitions.reduce(
-    (s, r) => s + (Number(r.work_completed_to_date) || 0),
-    0,
-  );
+  // Overview summary counts pulled from the active modules (Jobs / Materials
+  // / Schedule / Communication). The dropped Paperwork/Billing modules used
+  // to provide contract value + billed-to-date here.
+  const jobCount = detail.jobs.length;
+  const completedJobs = detail.jobs.filter((j) => j.status === "complete").length;
 
   return (
     <div className="space-y-5">
@@ -244,9 +233,9 @@ function OverviewTab({
       </div>
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Card label="Contract value" value={fmtUsd(totalContract)} />
-        <Card label="Change orders" value={fmtUsd(totalCo)} />
-        <Card label="Billed to date" value={fmtUsd(totalBilled)} />
+        <Card label="Jobs" value={jobCount} />
+        <Card label="Jobs complete" value={completedJobs} />
+        <Card label="Materials" value={detail.materials.length} />
         <Card label="Schedule tasks" value={detail.schedule_tasks.length} />
       </div>
 
@@ -380,11 +369,9 @@ function MaterialsTab({ detail }: { detail: ContractorDetail }) {
 function DocumentsTab({ detail }: { detail: ContractorDetail }) {
   if (detail.documents.length === 0)
     return (
-      <Empty msg="No documents tied to this contractor yet. Subcontractor agreements, change orders, and uploaded drawings tagged to them will appear here." />
+      <Empty msg="No documents tied to this contractor yet. Drawings uploaded by this contractor (matched on the verified-uploader name) appear here." />
     );
   const sourceLabel: Record<string, string> = {
-    agreement: "Agreement",
-    change_order: "Change order",
     drawing: "Drawing",
   };
   return (
@@ -464,47 +451,6 @@ function CommunicationTab({ detail }: { detail: ContractorDetail }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-function BillingTab({ detail }: { detail: ContractorDetail }) {
-  if (detail.requisitions.length === 0)
-    return (
-      <Empty msg="No sub requisitions yet. Requisitions are entered from the Billing module." />
-    );
-  return (
-    <div className="overflow-x-auto rounded-md border border-zinc-800">
-      <table className="w-full min-w-[720px] text-sm">
-        <thead>
-          <tr className="border-b border-zinc-800 text-left text-[11px] uppercase tracking-wider text-zinc-500">
-            <th className="px-3 py-2 font-medium">Period</th>
-            <th className="px-3 py-2 font-medium">Scheduled</th>
-            <th className="px-3 py-2 font-medium">WCTD</th>
-            <th className="px-3 py-2 font-medium">Amount due</th>
-            <th className="px-3 py-2 font-medium">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {detail.requisitions.map((r) => (
-            <tr key={r.id} className="border-b border-zinc-900">
-              <td className="px-3 py-2 text-zinc-200">
-                {fmtDate(r.period_start)} → {fmtDate(r.period_end)}
-              </td>
-              <td className="px-3 py-2 text-zinc-300">
-                {fmtUsd(r.scheduled_value)}
-              </td>
-              <td className="px-3 py-2 text-zinc-300">
-                {fmtUsd(r.work_completed_to_date)}
-              </td>
-              <td className="px-3 py-2 text-zinc-300">
-                {fmtUsd(r.amount_due)}
-              </td>
-              <td className="px-3 py-2 text-zinc-300">{r.status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }
 

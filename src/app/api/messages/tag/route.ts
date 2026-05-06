@@ -1,26 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-
-// Tags are the project module keys an email could be about. Keep this list
-// in sync with src/components/dashboard/modules.ts when adding modules.
-const TAG_OPTIONS = [
-  "budget",
-  "client",
-  "materials",
-  "schedule",
-  "subs",
-  "team",
-  "tasks",
-  "photos",
-  "plans",
-  "permits",
-  "notes",
-  "calendar",
-  "estimating",
-  "contracts",
-  "reports",
-] as const;
+import { TAG_OPTIONS } from "@/components/modules/messages/types";
 
 const PROMPT = `You are tagging construction project emails by topic.
 

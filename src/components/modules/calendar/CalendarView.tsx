@@ -21,8 +21,6 @@ type SourceModule =
   | "notes"
   | "tasks"
   | "plans"
-  | "billing"
-  | "estimating"
   | "general";
 
 type CalendarEvent = {
@@ -69,18 +67,6 @@ const SOURCE_COLOR: Record<SourceModule, { bg: string; border: string; dot: stri
       border: "border-yellow-500/30",
       dot: "bg-yellow-400",
       text: "text-yellow-300",
-    },
-    billing: {
-      bg: "bg-emerald-500/10",
-      border: "border-emerald-500/30",
-      dot: "bg-emerald-400",
-      text: "text-emerald-300",
-    },
-    estimating: {
-      bg: "bg-teal-500/10",
-      border: "border-teal-500/30",
-      dot: "bg-teal-400",
-      text: "text-teal-300",
     },
     general: {
       bg: "bg-zinc-700/40",
@@ -356,8 +342,6 @@ function Legend() {
     ["notes", "Meetings"],
     ["tasks", "Tasks"],
     ["plans", "Plans"],
-    ["billing", "Billing"],
-    ["estimating", "Estimating"],
   ];
   return (
     <div className="ml-auto hidden flex-wrap items-center gap-3 text-[11px] text-zinc-500 lg:flex">
@@ -1178,81 +1162,10 @@ async function fetchAllEvents(
     }
   }
 
-  // 8. Pay applications (client billing)
-  const payApps = await safe("Pay applications", async () => {
-    const { data, error } = await supabase
-      .from("pay_applications")
-      .select("id, application_number, period_end, status")
-      .eq("project_id", projectId);
-    if (error) throw error;
-    return data ?? [];
-  });
-  if (payApps) {
-    for (const p of payApps) {
-      const date = p.period_end as string | null;
-      if (!date) continue;
-      const num = (p.application_number as number | null) ?? "?";
-      events.push({
-        id: `payapp:${p.id}`,
-        source: "billing",
-        sourceLabel: "Billing",
-        kind: "Requisition Due",
-        title: `Pay App #${num}`,
-        date,
-        status: (p.status as string | null) ?? undefined,
-      });
-    }
-  }
-
-  // 9. Sub requisitions
-  const subReqs = await safe("Sub requisitions", async () => {
-    const { data, error } = await supabase
-      .from("sub_requisitions")
-      .select("id, period_end, status")
-      .eq("project_id", projectId);
-    if (error) throw error;
-    return data ?? [];
-  });
-  if (subReqs) {
-    for (const r of subReqs) {
-      const date = r.period_end as string | null;
-      if (!date) continue;
-      events.push({
-        id: `subreq:${r.id}`,
-        source: "billing",
-        sourceLabel: "Billing",
-        kind: "Sub Requisition",
-        title: "Sub requisition period end",
-        date,
-        status: (r.status as string | null) ?? undefined,
-      });
-    }
-  }
-
-  // 10. Bid requests
-  const bidReqs = await safe("Bid requests", async () => {
-    const { data, error } = await supabase
-      .from("bid_requests")
-      .select("id, trade_name, due_date, status")
-      .eq("project_id", projectId);
-    if (error) throw error;
-    return data ?? [];
-  });
-  if (bidReqs) {
-    for (const b of bidReqs) {
-      const date = b.due_date as string | null;
-      if (!date) continue;
-      events.push({
-        id: `bid:${b.id}`,
-        source: "estimating",
-        sourceLabel: "Estimating",
-        kind: "Bid Due",
-        title: (b.trade_name as string) ?? "Bid",
-        date,
-        status: (b.status as string | null) ?? undefined,
-      });
-    }
-  }
+  // Billing (pay_applications / sub_requisitions) and Estimating
+  // (bid_requests) are no longer in the active sidebar — their fetch
+  // branches were removed during the audit cleanup. The tables remain
+  // in the DB for any future re-enable.
 
   return { events, warnings };
 }

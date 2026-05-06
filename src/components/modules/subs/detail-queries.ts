@@ -10,37 +10,6 @@ export type ContractorMaterial = {
   price: number | null;
 };
 
-export type ContractorAgreement = {
-  id: string;
-  contract_number: string | null;
-  trade: string | null;
-  contract_value: number | null;
-  start_date: string | null;
-  completion_date: string | null;
-  status: string;
-  pdf_url: string | null;
-};
-
-export type ContractorChangeOrder = {
-  id: string;
-  co_number: number | null;
-  co_date: string | null;
-  description: string | null;
-  amount: number | null;
-  status: string;
-};
-
-export type ContractorRequisition = {
-  id: string;
-  period_start: string | null;
-  period_end: string | null;
-  scheduled_value: number | null;
-  work_completed_to_date: number | null;
-  amount_due: number | null;
-  status: string;
-  created_at: string;
-};
-
 export type ContractorScheduleTask = {
   id: string;
   name: string;
@@ -81,7 +50,7 @@ export type ContractorMessage = {
 
 export type ContractorDocument = {
   id: string;
-  source: "agreement" | "change_order" | "drawing";
+  source: "drawing";
   label: string;
   detail: string;
   url: string | null;
@@ -92,9 +61,6 @@ export type ContractorDetail = {
   source_extraction_id: string | null;
   source_drawing_id: string | null;
   materials: ContractorMaterial[];
-  agreements: ContractorAgreement[];
-  change_orders: ContractorChangeOrder[];
-  requisitions: ContractorRequisition[];
   schedule_tasks: ContractorScheduleTask[];
   jobs: ContractorJob[];
   plan_link: ContractorPlanLink | null;
@@ -129,38 +95,7 @@ export async function fetchContractorDetail(
     .order("product_name", { ascending: true });
   if (materialsRes.error) throw materialsRes.error;
 
-  // 3. Subcontractor agreements (Paperwork).
-  const agreementsRes = await supabase
-    .from("subcontractor_agreements")
-    .select(
-      "id, contract_number, trade, contract_value, start_date, completion_date, status, pdf_url",
-    )
-    .eq("project_id", projectId)
-    .eq("sub_id", subId)
-    .order("created_at", { ascending: false });
-  if (agreementsRes.error) throw agreementsRes.error;
-
-  // 4. Change orders (filter to ones that affect a sub contract for this sub).
-  const coRes = await supabase
-    .from("contract_change_orders")
-    .select("id, co_number, co_date, description, amount, status")
-    .eq("project_id", projectId)
-    .eq("sub_id", subId)
-    .order("co_number", { ascending: true });
-  if (coRes.error) throw coRes.error;
-
-  // 5. Sub requisitions (Billing).
-  const reqRes = await supabase
-    .from("sub_requisitions")
-    .select(
-      "id, period_start, period_end, scheduled_value, work_completed_to_date, amount_due, status, created_at",
-    )
-    .eq("project_id", projectId)
-    .eq("sub_id", subId)
-    .order("created_at", { ascending: false });
-  if (reqRes.error) throw reqRes.error;
-
-  // 6. Schedule tasks via project_subs link.
+  // 3. Schedule tasks via project_subs link.
   const linkRes = await supabase
     .from("project_subs")
     .select("id")
@@ -291,28 +226,8 @@ export async function fetchContractorDetail(
   }
   communications.sort((a, b) => (a.ts < b.ts ? 1 : -1));
 
-  // 10. Documents: agreements + change orders + plans uploads tied to sub.
+  // 10. Documents: plans uploads tied to sub by upload_verified_by name.
   const documents: ContractorDocument[] = [];
-  for (const a of agreementsRes.data ?? []) {
-    documents.push({
-      id: `agr-${a.id}`,
-      source: "agreement",
-      label: `Subcontractor agreement ${a.contract_number ?? ""}`.trim(),
-      detail: `${a.trade ?? ""} · ${a.status ?? ""}`.replace(/^ · | · $/g, ""),
-      url: (a.pdf_url as string | null) ?? null,
-      date: (a.start_date as string | null) ?? null,
-    });
-  }
-  for (const c of coRes.data ?? []) {
-    documents.push({
-      id: `co-${c.id}`,
-      source: "change_order",
-      label: `Change order #${c.co_number ?? "—"}`,
-      detail: ((c.description as string | null) ?? "").slice(0, 120),
-      url: null,
-      date: (c.co_date as string | null) ?? null,
-    });
-  }
   if (subName) {
     // Drawings uploaded by anyone with the sub's name in upload_verified_by.
     const drawRes = await supabase
@@ -344,9 +259,6 @@ export async function fetchContractorDetail(
     source_extraction_id,
     source_drawing_id,
     materials: (materialsRes.data ?? []) as ContractorMaterial[],
-    agreements: (agreementsRes.data ?? []) as ContractorAgreement[],
-    change_orders: (coRes.data ?? []) as ContractorChangeOrder[],
-    requisitions: (reqRes.data ?? []) as ContractorRequisition[],
     schedule_tasks,
     jobs,
     plan_link,
