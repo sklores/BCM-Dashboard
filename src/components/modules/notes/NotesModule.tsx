@@ -678,7 +678,7 @@ function ScratchSection({
                 </button>
               )}
               {editable && (
-                <div className="flex items-center gap-1.5 border-t border-zinc-800/60 pt-2">
+                <div className="flex items-center justify-end gap-1.5 border-t border-zinc-800/60 pt-2">
                   <button
                     type="button"
                     onClick={(e) => {
