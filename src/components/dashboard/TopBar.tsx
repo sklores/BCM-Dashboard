@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Inbox,
   Loader2,
+  LogOut,
   MapPin,
   Moon,
   Search,
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export type Project = {
@@ -43,10 +45,28 @@ export function TopBar({
   onProjectChange,
   onOpenSettings,
 }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
   const [light, setLight] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const active = projects.find((p) => p.id === activeProjectId) ?? projects[0];
+
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setUserEmail(data.user?.email ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }
 
   useEffect(() => {
     setLight(document.documentElement.classList.contains("bcm-light"));
@@ -160,6 +180,25 @@ export function TopBar({
           >
             <Settings className="h-4 w-4" />
           </button>
+        )}
+        {userEmail && (
+          <div className="ml-2 flex items-center gap-2 border-l border-zinc-800 pl-3">
+            <span
+              className="hidden max-w-[180px] truncate text-xs text-zinc-400 sm:inline"
+              title={userEmail}
+            >
+              {userEmail}
+            </span>
+            <button
+              type="button"
+              onClick={signOut}
+              className="flex items-center gap-1 rounded-md px-2 py-1.5 text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         )}
       </div>
     </header>

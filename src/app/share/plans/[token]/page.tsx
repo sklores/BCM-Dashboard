@@ -3,7 +3,7 @@
 // via the anon key — RLS is disabled in beta so the read works.
 
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabaseAnon as supabase } from "@/lib/supabase-anon";
 
 type Drawing = {
   id: string;

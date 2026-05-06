@@ -1,8 +1,8 @@
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
-import { supabase } from "@/lib/supabase";
+import { supabaseAnon } from "@/lib/supabase-anon";
 
 export default async function Home() {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAnon
     .from("projects")
     .select("id, name, address")
     .order("created_at", { ascending: true });
