@@ -12,6 +12,7 @@ import {
   Trash2,
   UserCircle2,
   Users as UsersIcon,
+  X,
 } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
@@ -412,10 +413,8 @@ export function ContactsModule({ projectId }: ModuleProps) {
       {error && <p className="text-sm text-red-400">Error: {error}</p>}
 
       {!loading && !error && (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          {/* List pane */}
-          <div className="flex flex-col gap-4">
-            {(categoryMissing
+        <div className="flex flex-col gap-6">
+          {(categoryMissing
               ? groupedByCategory.sections.filter(
                   (s) => s.key === "__uncategorized__",
                 )
@@ -469,52 +468,41 @@ export function ContactsModule({ projectId }: ModuleProps) {
                       : "No companies yet — use Add company in the toolbar above."}
                   </div>
                 ) : (
-                  section.companies.map(({ company, rows }) => (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {section.companies.map(({ company, rows }) => (
                     <div
                       key={company.id}
-                      className="rounded-md border border-zinc-800 bg-zinc-900/40"
+                      className="flex flex-col rounded-md border border-zinc-800 bg-zinc-900/40 transition hover:border-zinc-700"
                     >
                       <button
                         type="button"
                         onClick={() =>
                           setSelection({ kind: "company", id: company.id })
                         }
-                        className={`flex w-full items-center gap-2 px-3 py-2 text-left transition hover:bg-zinc-900 ${
-                          selectedCompany?.id === company.id
-                            ? "bg-zinc-900"
-                            : ""
-                        }`}
+                        className="flex w-full items-center gap-2 rounded-t-md border-b border-zinc-800/60 px-3 py-2 text-left transition hover:bg-zinc-900"
                       >
                         <Building2 className="h-4 w-4 text-zinc-500" />
-                        <span className="text-sm font-medium text-zinc-200">
+                        <span className="truncate text-sm font-medium text-zinc-200">
                           {company.company_name?.trim() || (
                             <span className="italic text-zinc-500">
                               Click to fill in name…
                             </span>
                           )}
                         </span>
-                        <span className="ml-auto text-xs text-zinc-500">
+                        <span className="ml-auto rounded-full bg-zinc-800/80 px-1.5 py-0.5 text-[10px] text-zinc-400">
                           {rows.length}
                         </span>
                       </button>
-                      {rows.length > 0 && (
-                        <ul className="divide-y divide-zinc-800/60 border-t border-zinc-800/60">
-                          {rows.map((c) => {
-                            const active =
-                              selectedContact?.id === c.id &&
-                              selection?.kind === "contact";
-                            return (
+                      {rows.length > 0 ? (
+                        <ul className="divide-y divide-zinc-800/60">
+                          {rows.map((c) => (
                               <li key={c.id}>
                                 <button
                                   type="button"
                                   onClick={() =>
                                     setSelection({ kind: "contact", id: c.id })
                                   }
-                                  className={`flex w-full items-center gap-3 px-3 py-2 text-left transition ${
-                                    active
-                                      ? "bg-blue-600/10 text-blue-300"
-                                      : "text-zinc-300 hover:bg-zinc-900"
-                                  }`}
+                                  className="flex w-full items-center gap-3 px-3 py-2 text-left text-zinc-300 transition hover:bg-zinc-900"
                                 >
                                   <UserCircle2 className="h-4 w-4 shrink-0 text-zinc-500" />
                                   <div className="min-w-0 flex-1">
@@ -532,12 +520,16 @@ export function ContactsModule({ projectId }: ModuleProps) {
                                   )}
                                 </button>
                               </li>
-                            );
-                          })}
+                          ))}
                         </ul>
+                      ) : (
+                        <p className="px-3 py-2 text-[11px] text-zinc-600">
+                          No contacts yet — open this card to add one.
+                        </p>
                       )}
                     </div>
-                  ))
+                  ))}
+                  </div>
                 ))}
               </div>
               );
@@ -547,85 +539,104 @@ export function ContactsModule({ projectId }: ModuleProps) {
                 <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
                   Unaffiliated contacts
                 </div>
-                <ul className="divide-y divide-zinc-800/60 rounded-md border border-zinc-800 bg-zinc-900/40">
-                  {groupedByCategory.orphans.map((c) => {
-                    const active =
-                      selectedContact?.id === c.id &&
-                      selection?.kind === "contact";
-                    return (
-                      <li key={c.id}>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelection({ kind: "contact", id: c.id })
-                          }
-                          className={`flex w-full items-center gap-3 px-3 py-2 text-left transition ${
-                            active
-                              ? "bg-blue-600/10 text-blue-300"
-                              : "text-zinc-300 hover:bg-zinc-900"
-                          }`}
-                        >
-                          <UserCircle2 className="h-4 w-4 shrink-0 text-zinc-500" />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm">
-                              {contactDisplayName(c)}
-                            </div>
-                            {c.email && (
-                              <div className="truncate text-[11px] text-zinc-500">
-                                {c.email}
-                              </div>
-                            )}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {groupedByCategory.orphans.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() =>
+                        setSelection({ kind: "contact", id: c.id })
+                      }
+                      className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-left text-zinc-300 transition hover:bg-zinc-900"
+                    >
+                      <UserCircle2 className="h-4 w-4 shrink-0 text-zinc-500" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm">
+                          {contactDisplayName(c)}
+                        </div>
+                        {c.email && (
+                          <div className="truncate text-[11px] text-zinc-500">
+                            {c.email}
                           </div>
-                          {c.role_type && (
-                            <RoleBadge role={c.role_type as RoleType} />
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                        )}
+                      </div>
+                      {c.role_type && (
+                        <RoleBadge role={c.role_type as RoleType} />
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
-
-          {/* Detail pane */}
-          <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-4">
-            {!selection && (
-              <div className="flex h-full flex-col items-center justify-center gap-2 py-8 text-center text-sm text-zinc-500">
-                <UserCircle2 className="h-8 w-8 text-zinc-700" />
-                <p>Select a contact or company.</p>
-              </div>
-            )}
-
-            {selectedContact && (
-              <ContactDetail
-                projectId={projectId}
-                contact={selectedContact}
-                companies={companies}
-                editable={editable}
-                onUpdate={handleUpdateContact}
-                onDelete={handleDeleteContact}
-              />
-            )}
-
-            {selectedCompany && (
-              <CompanyDetail
-                company={selectedCompany}
-                contacts={contacts.filter(
-                  (c) => c.company_id === selectedCompany.id,
-                )}
-                editable={editable}
-                onUpdate={handleUpdateCompany}
-                onDelete={handleDeleteCompany}
-                onAddContactHere={() => handleAddContact(selectedCompany.id)}
-                onSelectContact={(id) =>
-                  setSelection({ kind: "contact", id })
-                }
-              />
-            )}
-          </div>
         </div>
       )}
+
+      {/* Floating detail popup — shown for either kind of selection. */}
+      {(selectedContact || selectedCompany) && (
+        <DetailPopup onClose={() => setSelection(null)}>
+          {selectedContact && (
+            <ContactDetail
+              projectId={projectId}
+              contact={selectedContact}
+              companies={companies}
+              editable={editable}
+              onUpdate={handleUpdateContact}
+              onDelete={handleDeleteContact}
+            />
+          )}
+          {selectedCompany && (
+            <CompanyDetail
+              company={selectedCompany}
+              contacts={contacts.filter(
+                (c) => c.company_id === selectedCompany.id,
+              )}
+              editable={editable}
+              onUpdate={handleUpdateCompany}
+              onDelete={handleDeleteCompany}
+              onAddContactHere={() => handleAddContact(selectedCompany.id)}
+              onSelectContact={(id) => setSelection({ kind: "contact", id })}
+            />
+          )}
+        </DetailPopup>
+      )}
+    </div>
+  );
+}
+
+function DetailPopup({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  // Esc to dismiss.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:items-center sm:p-10"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="relative w-full max-w-2xl rounded-lg border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        {children}
+      </div>
     </div>
   );
 }
