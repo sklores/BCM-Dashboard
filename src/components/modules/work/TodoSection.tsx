@@ -51,6 +51,7 @@ export function TodoSection({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [draftShared, setDraftShared] = useState(false);
   const [deviceId, setDeviceId] = useState<string>("");
 
   useEffect(() => {
@@ -97,14 +98,20 @@ export function TodoSection({
       sort_order: 0,
       created_at: new Date().toISOString(),
       device_id: deviceId,
-      shared: false,
+      shared: draftShared,
     };
     setTodos((prev) => [...prev, optimistic]);
     setDraft("");
+    setDraftShared(false);
     try {
       const { data, error } = await supabase
         .from("personal_todos")
-        .insert({ project_id: projectId, title, device_id: deviceId })
+        .insert({
+          project_id: projectId,
+          title,
+          device_id: deviceId,
+          shared: optimistic.shared,
+        })
         .select(SELECT_COLS)
         .single();
       if (error) throw error;
@@ -166,28 +173,39 @@ export function TodoSection({
       </p>
 
       {editable && (
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={draft}
-            placeholder="Add a to-do…"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAdd();
-              }
-            }}
-            className="flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          />
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={draft.trim() === ""}
-            className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add
-          </button>
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={draft}
+              placeholder="Add a to-do…"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleAdd();
+                }
+              }}
+              className="flex-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={draft.trim() === ""}
+              className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-200 hover:border-blue-500 hover:text-blue-400 disabled:opacity-40"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add
+            </button>
+          </div>
+          <label className="inline-flex select-none items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-400">
+            <input
+              type="checkbox"
+              checked={draftShared}
+              onChange={(e) => setDraftShared(e.target.checked)}
+              className="h-3 w-3 accent-blue-500"
+            />
+            Share with project (visible to mobile + other browsers)
+          </label>
         </div>
       )}
 
