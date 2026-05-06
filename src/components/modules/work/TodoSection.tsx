@@ -12,7 +12,11 @@ type Todo = {
   sort_order: number;
   created_at: string;
   device_id: string | null;
+  shared: boolean;
 };
+
+const SELECT_COLS =
+  "id, project_id, title, done, sort_order, created_at, device_id, shared";
 
 // Per-device pseudo-user id used to scope To Do items to "this user" until
 // real auth lands in v2. Stored in localStorage so the same browser keeps
@@ -62,9 +66,9 @@ export function TodoSection({
       try {
         const { data, error } = await supabase
           .from("personal_todos")
-          .select("id, project_id, title, done, sort_order, created_at, device_id")
+          .select(SELECT_COLS)
           .eq("project_id", projectId)
-          .eq("device_id", deviceId)
+          .or(`device_id.eq.${deviceId},shared.eq.true`)
           .order("done", { ascending: true })
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true });
@@ -93,6 +97,7 @@ export function TodoSection({
       sort_order: 0,
       created_at: new Date().toISOString(),
       device_id: deviceId,
+      shared: false,
     };
     setTodos((prev) => [...prev, optimistic]);
     setDraft("");
@@ -100,7 +105,7 @@ export function TodoSection({
       const { data, error } = await supabase
         .from("personal_todos")
         .insert({ project_id: projectId, title, device_id: deviceId })
-        .select("id, project_id, title, done, sort_order, created_at, device_id")
+        .select(SELECT_COLS)
         .single();
       if (error) throw error;
       setTodos((prev) =>
@@ -156,7 +161,8 @@ export function TodoSection({
       {error && <p className="text-sm text-red-400">{error}</p>}
       <p className="text-xs text-zinc-500">
         Quick personal checklist for this project — scoped to this browser
-        until full user accounts ship.
+        until full user accounts ship. Items shared from mobile (Super in the
+        field) appear here too and are read-only on this side.
       </p>
 
       {editable && (
@@ -195,7 +201,7 @@ export function TodoSection({
             <TodoRow
               key={t.id}
               todo={t}
-              editable={editable}
+              editable={editable && t.device_id === deviceId}
               onToggle={handleToggle}
               onEdit={handleEdit}
               onDelete={handleDelete}
@@ -210,7 +216,7 @@ export function TodoSection({
             <TodoRow
               key={t.id}
               todo={t}
-              editable={editable}
+              editable={editable && t.device_id === deviceId}
               onToggle={handleToggle}
               onEdit={handleEdit}
               onDelete={handleDelete}
