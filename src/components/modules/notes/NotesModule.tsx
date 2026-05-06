@@ -668,7 +668,17 @@ function ScratchSection({
                 </span>
               </button>
               {editable && (
-                <div className="absolute right-2 top-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onDelete(n.id)}
+                  className="absolute right-2 top-2 rounded p-1 text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
+                  aria-label="Delete note"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {editable && (
+                <div className="flex items-center gap-1.5 border-t border-zinc-800/60 pt-2">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -678,7 +688,7 @@ function ScratchSection({
                     disabled={
                       convertingId === n.id || convertedIds.has(n.id)
                     }
-                    className={`rounded-md border px-1.5 py-0.5 text-[10px] transition opacity-0 group-hover:opacity-100 disabled:opacity-100 ${
+                    className={`rounded-md border px-2 py-0.5 text-[10px] transition disabled:opacity-100 ${
                       convertedIds.has(n.id)
                         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                         : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
@@ -700,7 +710,7 @@ function ScratchSection({
                     disabled={
                       promotingId === n.id || !!n.promoted_to_message_id
                     }
-                    className={`rounded-md border px-1.5 py-0.5 text-[10px] transition opacity-0 group-hover:opacity-100 disabled:opacity-100 ${
+                    className={`rounded-md border px-2 py-0.5 text-[10px] transition disabled:opacity-100 ${
                       n.promoted_to_message_id
                         ? "border-violet-500/40 bg-violet-500/10 text-violet-300"
                         : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
@@ -712,14 +722,6 @@ function ScratchSection({
                       : promotingId === n.id
                         ? "…"
                         : "→ Messages"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(n.id)}
-                    className="rounded p-1 text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
-                    aria-label="Delete note"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               )}
