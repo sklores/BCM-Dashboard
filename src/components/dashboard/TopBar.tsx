@@ -510,8 +510,6 @@ async function runSearch(
     tasksRes,
     contactsRes,
     messagesRes,
-    rfisRes,
-    submittalsRes,
     permitsRes,
     meetingsRes,
     drawingsRes,
@@ -540,22 +538,9 @@ async function runSearch(
         .or(`subject.ilike.${like},body.ilike.${like}`)
         .limit(PER),
     ),
-    safe(
-      supabase
-        .from("rfis")
-        .select("id, rfi_number, question, status")
-        .eq("project_id", projectId)
-        .ilike("question", like)
-        .limit(PER),
-    ),
-    safe(
-      supabase
-        .from("submittals")
-        .select("id, submittal_number, description, status")
-        .eq("project_id", projectId)
-        .ilike("description", like)
-        .limit(PER),
-    ),
+    // RFIs + Submittals were dropped from the dashboard — they live in
+    // the separate bcm-plans-permits tool now. Removed from global
+    // search to avoid PGRST205 "schema cache" errors.
     safe(
       supabase
         .from("permits")
@@ -619,26 +604,6 @@ async function runSearch(
             ? ` · ${((m.body as string) ?? "").slice(0, 60)}`
             : "",
         ),
-      });
-    }
-  }
-  if (rfisRes?.data) {
-    for (const r of rfisRes.data) {
-      out.push({
-        id: r.id as string,
-        moduleKey: "plans",
-        title: `RFI #${(r.rfi_number as string) ?? "?"}`,
-        snippet: ((r.question as string | null) ?? "").slice(0, 80),
-      });
-    }
-  }
-  if (submittalsRes?.data) {
-    for (const s of submittalsRes.data) {
-      out.push({
-        id: s.id as string,
-        moduleKey: "plans",
-        title: `Submittal ${(s.submittal_number as string) ?? "?"}`,
-        snippet: ((s.description as string | null) ?? "").slice(0, 80),
       });
     }
   }

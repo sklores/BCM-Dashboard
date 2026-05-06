@@ -1121,46 +1121,9 @@ async function fetchAllEvents(
     }
   }
 
-  // 7. Submittals
-  const submittals = await safe("Submittals", async () => {
-    const { data, error } = await supabase
-      .from("submittals")
-      .select(
-        "id, submittal_number, description, date_submitted, date_returned, status",
-      )
-      .eq("project_id", projectId);
-    if (error) throw error;
-    return data ?? [];
-  });
-  if (submittals) {
-    for (const s of submittals) {
-      const num = (s.submittal_number as string | null) ?? "Submittal";
-      const desc = (s.description as string | null) ?? "";
-      const titleBase = `${num}${desc ? " · " + desc : ""}`;
-      if (s.date_submitted) {
-        events.push({
-          id: `subSub:${s.id}`,
-          source: "plans",
-          sourceLabel: "Plans",
-          kind: "Submittal Submitted",
-          title: titleBase,
-          date: s.date_submitted as string,
-          status: (s.status as string | null) ?? undefined,
-        });
-      }
-      if (s.date_returned) {
-        events.push({
-          id: `subRet:${s.id}`,
-          source: "plans",
-          sourceLabel: "Plans",
-          kind: "Submittal Returned",
-          title: titleBase,
-          date: s.date_returned as string,
-          status: (s.status as string | null) ?? undefined,
-        });
-      }
-    }
-  }
+  // Submittals + RFIs used to be sourced here. They're now owned by the
+  // separate bcm-plans-permits tool, which writes its own events to the
+  // shared alerts table. The Timeline tab picks those up.
 
   // Billing (pay_applications / sub_requisitions) and Estimating
   // (bid_requests) are no longer in the active sidebar — their fetch

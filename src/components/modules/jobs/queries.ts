@@ -169,29 +169,14 @@ export async function fetchJobDrawingOptions(
 }
 
 export async function fetchJobExtractionOptions(
-  projectId: string,
+  _projectId: string,
 ): Promise<JobExtractionOption[]> {
-  // Pull confirmed extractions across all drawings on this project.
-  const dr = await supabase
-    .from("drawings")
-    .select("id")
-    .eq("project_id", projectId);
-  if (dr.error) throw dr.error;
-  const drawingIds = (dr.data ?? []).map((d) => d.id as string);
-  if (drawingIds.length === 0) return [];
-  const { data, error } = await supabase
-    .from("drawing_extractions")
-    .select("id, drawing_id, label, category, status")
-    .in("drawing_id", drawingIds)
-    .eq("status", "confirmed")
-    .order("label", { ascending: true });
-  if (error) throw error;
-  return (data ?? []).map((e) => ({
-    id: e.id as string,
-    drawing_id: e.drawing_id as string,
-    label: (e.label as string | null) ?? null,
-    category: (e.category as string | null) ?? null,
-  }));
+  // The drawing_extractions table was retired when the bcm-plans-permits
+  // tool took over the Plans schema. Job → Drawings picker now offers
+  // whole drawings only; per-extraction targeting comes back when the
+  // new tool exposes its richer text-block / chunk model to the
+  // dashboard via a stable view or alerts payload.
+  return [];
 }
 
 export async function fetchJobPhaseOptions(

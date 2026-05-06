@@ -165,18 +165,10 @@ export async function fetchContractorDetail(
         plan_link.drawing_title = dRes.data.title ?? null;
       }
     }
-    if (source_extraction_id) {
-      const eRes = await supabase
-        .from("drawing_extractions")
-        .select("label, description, category")
-        .eq("id", source_extraction_id)
-        .maybeSingle();
-      if (!eRes.error && eRes.data) {
-        plan_link.extraction_label = eRes.data.label ?? null;
-        plan_link.extraction_description = eRes.data.description ?? null;
-        plan_link.extraction_category = eRes.data.category ?? null;
-      }
-    }
+    // drawing_extractions table was retired when the new bcm-plans-permits
+    // tool took over the Plans schema. The label/description/category
+    // fields stay null here; the source_drawing_id lookup above still
+    // works since `drawings` is preserved.
   }
 
   // 9. Communications: messages from the sub's email + scratch_notes
