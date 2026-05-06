@@ -1,8 +1,8 @@
 "use client";
 
-// FeedView — chronological activity feed sourced from the alerts table.
-// The same rows the TopBar bell summarizes, but with full text, level
-// styling, and per-row jump-to-module navigation.
+// TimelineView — chronological activity timeline sourced from the alerts
+// table. The same rows the TopBar bell summarizes, but with full text,
+// level styling, and per-row jump-to-module navigation.
 
 import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCheck, Loader2 } from "lucide-react";
@@ -45,7 +45,7 @@ function fmtModule(key: string | null): string {
     .join(" ");
 }
 
-export function FeedView({ projectId }: ModuleProps) {
+export function TimelineView({ projectId }: ModuleProps) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

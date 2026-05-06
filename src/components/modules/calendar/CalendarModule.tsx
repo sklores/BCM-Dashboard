@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Bell, CalendarDays } from "lucide-react";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import { CalendarView } from "./CalendarView";
-import { FeedView } from "./FeedView";
+import { TimelineView } from "./TimelineView";
 
-type Tab = "calendar" | "feed";
+type Tab = "calendar" | "timeline";
 
 export function CalendarModule(props: ModuleProps) {
   const [tab, setTab] = useState<Tab>("calendar");
@@ -26,15 +26,15 @@ export function CalendarModule(props: ModuleProps) {
           label="Calendar"
         />
         <TabBtn
-          active={tab === "feed"}
-          onClick={() => setTab("feed")}
+          active={tab === "timeline"}
+          onClick={() => setTab("timeline")}
           icon={<Bell className="h-3.5 w-3.5" />}
-          label="Feed"
+          label="Timeline"
         />
       </div>
 
       {tab === "calendar" && <CalendarView {...props} />}
-      {tab === "feed" && <FeedView {...props} />}
+      {tab === "timeline" && <TimelineView {...props} />}
     </div>
   );
 }
