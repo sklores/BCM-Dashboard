@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BarChart3 } from "lucide-react";
+import {
+  BarChart3,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import {
@@ -66,6 +72,42 @@ export function ScheduleModule({ projectId }: ModuleProps) {
   const [materialCatalog, setMaterialCatalog] = useState<MaterialCatalogOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+
+  // Sync state when the user exits browser fullscreen via Esc / chrome.
+  useEffect(() => {
+    function onFsChange() {
+      if (!document.fullscreenElement && fullscreen) setFullscreen(false);
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, [fullscreen]);
+
+  // Exit browser fullscreen if the module unmounts (route change) while
+  // still in FS so we don't leave the OS chrome hidden behind us.
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  async function toggleFullscreen() {
+    const next = !fullscreen;
+    setFullscreen(next);
+    try {
+      if (next) {
+        if (!document.fullscreenElement)
+          await document.documentElement.requestFullscreen();
+      } else if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // Browser may reject the request; in-app overlay still applies.
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -316,11 +358,69 @@ export function ScheduleModule({ projectId }: ModuleProps) {
     }
   }
 
+  // Zoom only applies to dense table-style views (Detailed + Gantt +
+  // Calendar). Milestone is already a sparse summary.
+  const zoomable = view === "detailed" || view === "gantt" || view === "calendar";
+
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
+    <div
+      className={
+        fullscreen
+          ? "fixed inset-0 z-40 flex flex-col gap-6 overflow-y-auto bg-zinc-950 p-10"
+          : "flex flex-col gap-6"
+      }
+    >
+      <div className="flex flex-wrap items-center gap-3">
         <BarChart3 className="h-6 w-6 text-blue-400" />
         <h1 className="text-2xl font-semibold text-zinc-100">Schedule</h1>
+        <div className="ml-auto flex items-center gap-2">
+          {zoomable && (
+            <div className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.max(0.75, z - 0.1))}
+                disabled={zoom <= 0.75}
+                className="rounded p-1.5 text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
+                title="Zoom out"
+                aria-label="Zoom out"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom(1)}
+                className="px-1 text-[11px] text-zinc-300 hover:text-zinc-100"
+                title="Reset zoom"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+              <button
+                type="button"
+                onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
+                disabled={zoom >= 2}
+                className="rounded p-1.5 text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
+                title="Zoom in"
+                aria-label="Zoom in"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+            title={fullscreen ? "Exit full screen (Esc)" : "Full screen"}
+          >
+            {fullscreen ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
+            {fullscreen ? "Exit full screen" : "Full screen"}
+          </button>
+        </div>
       </div>
 
       <ViewSwitcher value={view} onChange={setView} />
@@ -329,7 +429,19 @@ export function ScheduleModule({ projectId }: ModuleProps) {
       {error && <p className="text-sm text-red-400">Error: {error}</p>}
 
       {!loading && !error && (
-        <>
+        <div className={zoomable ? "overflow-x-auto" : ""}>
+          <div
+            style={
+              zoomable
+                ? {
+                    transform: `scale(${zoom})`,
+                    transformOrigin: "top left",
+                    width: `${100 / zoom}%`,
+                  }
+                : undefined
+            }
+            className="flex flex-col gap-6"
+          >
           {view === "gantt" && (
             <GanttView phases={phases} tasks={tasks} subtasks={subtasks} />
           )}
@@ -362,7 +474,8 @@ export function ScheduleModule({ projectId }: ModuleProps) {
             />
           )}
           {view === "milestone" && <MilestoneView phases={phases} />}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );
