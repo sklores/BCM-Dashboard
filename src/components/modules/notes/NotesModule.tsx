@@ -668,17 +668,17 @@ function ScratchSection({
                 </span>
               </button>
               {editable && (
-                <button
-                  type="button"
-                  onClick={() => onDelete(n.id)}
-                  className="absolute right-2 top-2 rounded p-1 text-zinc-600 opacity-0 transition hover:bg-zinc-800 hover:text-red-400 group-hover:opacity-100"
-                  aria-label="Delete note"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-              {editable && (
-                <div className="flex items-center justify-end gap-1.5 border-t border-zinc-800/60 pt-2">
+                <div className="flex items-center justify-between gap-1.5 border-t border-zinc-800/60 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => onDelete(n.id)}
+                    className="rounded p-1 text-zinc-500 transition hover:bg-zinc-800 hover:text-red-400"
+                    aria-label="Delete note"
+                    title="Delete note"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="flex items-center gap-1.5">
                   <button
                     type="button"
                     onClick={(e) => {
@@ -723,6 +723,7 @@ function ScratchSection({
                         ? "…"
                         : "→ Messages"}
                   </button>
+                  </div>
                 </div>
               )}
             </div>
