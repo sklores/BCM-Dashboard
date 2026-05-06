@@ -5,12 +5,16 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Maximize2,
+  Minimize2,
   Plus,
   Sparkles,
   Trash2,
   Upload,
   Wallet,
   X,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
@@ -63,6 +67,42 @@ export function BudgetModule({ projectId }: ModuleProps) {
   const [showImport, setShowImport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [zoom, setZoom] = useState(1);
+
+  // Sync state when the user exits browser fullscreen via Esc or chrome.
+  useEffect(() => {
+    function onFsChange() {
+      if (!document.fullscreenElement && fullscreen) setFullscreen(false);
+    }
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, [fullscreen]);
+
+  // Exit browser fullscreen on unmount in case the module is unmounted
+  // (route change) while still in FS.
+  useEffect(() => {
+    return () => {
+      if (document.fullscreenElement) {
+        void document.exitFullscreen().catch(() => {});
+      }
+    };
+  }, []);
+
+  async function toggleFullscreen() {
+    const next = !fullscreen;
+    setFullscreen(next);
+    try {
+      if (next) {
+        if (!document.fullscreenElement)
+          await document.documentElement.requestFullscreen();
+      } else if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch {
+      // Browser may reject the request; in-app overlay still applies.
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -290,10 +330,62 @@ export function BudgetModule({ projectId }: ModuleProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
+    <div
+      className={
+        fullscreen
+          ? "fixed inset-0 z-40 flex flex-col gap-6 overflow-y-auto bg-zinc-950 p-10"
+          : "flex flex-col gap-6"
+      }
+    >
+      <div className="flex flex-wrap items-center gap-3">
         <Wallet className="h-6 w-6 text-blue-400" />
         <h1 className="text-2xl font-semibold text-zinc-100">Budget</h1>
+        <div className="ml-auto flex items-center gap-2">
+          <div className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.max(0.75, z - 0.1))}
+              disabled={zoom <= 0.75}
+              className="rounded p-1.5 text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(1)}
+              className="px-1 text-[11px] text-zinc-300 hover:text-zinc-100"
+              title="Reset zoom"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom((z) => Math.min(2, z + 0.1))}
+              disabled={zoom >= 2}
+              className="rounded p-1.5 text-zinc-400 hover:text-zinc-200 disabled:opacity-40"
+              title="Zoom in"
+              aria-label="Zoom in"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+            aria-label={fullscreen ? "Exit full screen" : "Full screen"}
+            title={fullscreen ? "Exit full screen (Esc)" : "Full screen"}
+          >
+            {fullscreen ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
+            {fullscreen ? "Exit full screen" : "Full screen"}
+          </button>
+        </div>
       </div>
 
       <div className="inline-flex w-fit rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
@@ -326,6 +418,21 @@ export function BudgetModule({ projectId }: ModuleProps) {
           View only — your role ({role}) cannot edit the budget.
         </p>
       )}
+
+      {/* Zoom-scaled content. transform: scale + transform-origin top-left
+          gives a clean magnification; the wrapper width is widened
+          inversely so scaled content fills the column at 100% but doesn't
+          overflow oddly at 75%. The outer scroll container handles overflow
+          when zoomed beyond fit. */}
+      <div className="overflow-x-auto">
+        <div
+          style={{
+            transform: `scale(${zoom})`,
+            transformOrigin: "top left",
+            width: `${100 / zoom}%`,
+          }}
+          className="flex flex-col gap-6"
+        >
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -405,6 +512,8 @@ export function BudgetModule({ projectId }: ModuleProps) {
           onDelete={handleDeleteClarification}
         />
       )}
+        </div>
+      </div>
     </div>
   );
 }
