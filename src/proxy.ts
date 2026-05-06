@@ -4,8 +4,11 @@ import { NextResponse, type NextRequest } from "next/server";
 // Auth gate. Anyone hitting any URL that isn't /login or a public share
 // link gets bounced to /login until they sign in. The session is read
 // from the auth cookies @supabase/ssr writes from the client side.
+//
+// Next 16 renamed the file convention from `middleware.ts` to
+// `proxy.ts` and the export from `middleware` to `proxy`.
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

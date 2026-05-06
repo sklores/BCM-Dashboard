@@ -1,11 +1,31 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, LogIn } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
+  // useSearchParams() reads query params at the client; Next 16 requires
+  // it to be inside a Suspense boundary so the page can prerender.
+  return (
+    <Suspense fallback={<LoginShell />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginShell() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-6">
+      <div className="w-full max-w-sm rounded-lg border border-zinc-800 bg-zinc-900/60 p-6 text-center text-sm text-zinc-500 shadow-xl">
+        Loading…
+      </div>
+    </div>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/";
