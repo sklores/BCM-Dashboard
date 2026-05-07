@@ -394,14 +394,14 @@ function SortablePhaseRow({
       style={style}
       className="group border-b border-zinc-800 bg-zinc-900/40"
     >
-      <td className="px-3 py-2">
-        <div className="flex items-center gap-1.5">
+      <td className="min-w-[18rem] px-3 py-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {editable && (
             <button
               type="button"
               {...attributes}
               {...listeners}
-              className="cursor-grab text-zinc-600 hover:text-zinc-300 active:cursor-grabbing"
+              className="shrink-0 cursor-grab text-zinc-600 hover:text-zinc-300 active:cursor-grabbing"
               aria-label="Drag to reorder phase"
               title="Drag to reorder"
             >
@@ -411,7 +411,7 @@ function SortablePhaseRow({
           <button
             type="button"
             onClick={onToggle}
-            className="text-zinc-500 hover:text-zinc-200"
+            className="shrink-0 text-zinc-500 hover:text-zinc-200"
             aria-label={phaseOpen ? "Collapse" : "Expand"}
           >
             {phaseOpen ? (
@@ -420,25 +420,28 @@ function SortablePhaseRow({
               <ChevronRight className="h-4 w-4" />
             )}
           </button>
-          <EditableText
-            value={phase.name}
-            editable={editable}
-            onCommit={(v) => handlers.onUpdatePhase(phase.id, { name: v })}
-            className="font-medium text-zinc-100"
-          />
-          <span className="text-xs font-normal text-zinc-500">
-            ({taskCount})
-          </span>
-          {phase.progress_pct !== null && phase.progress_pct !== undefined && (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-300"
-              title="Progress driven by jobs marked complete"
-            >
-              {phase.progress_pct}%
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <EditableText
+              value={phase.name}
+              editable={editable}
+              onCommit={(v) => handlers.onUpdatePhase(phase.id, { name: v })}
+              className="min-w-0 flex-1 whitespace-nowrap font-medium text-zinc-100"
+            />
+            <span className="shrink-0 text-xs font-normal text-zinc-500">
+              ({taskCount})
             </span>
-          )}
+            {phase.progress_pct !== null &&
+              phase.progress_pct !== undefined && (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-300"
+                  title="Progress driven by jobs marked complete"
+                >
+                  {phase.progress_pct}%
+                </span>
+              )}
+          </div>
           <label
-            className={`ml-2 inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition ${
+            className={`ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] transition ${
               phase.is_milestone
                 ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
                 : "border-zinc-800 bg-zinc-900 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
