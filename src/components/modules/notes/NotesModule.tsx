@@ -151,24 +151,64 @@ export function NotesModule({ projectId }: ModuleProps) {
     }
   }
 
-  // Promote a note to a Work → Task. The note stays in Notes; the new
-  // task carries the note's title/body and links back via linked_module
-  // /linked_record_id (added in tasks_v2). The note's
-  // promoted_to_message_id field would be reused for symmetry but we
-  // don't have a reciprocal link yet — keep one-way for now.
-  async function handleConvertNoteToTask(n: ScratchNote) {
+  // Promote a scratch note to one or more Work → Tasks. The note runs
+  // through Claude on the server (/api/notes/extract-tasks) which
+  // splits multi-action notes into clean individual tasks with
+  // imperative titles, picks priority + task_type, and skips
+  // non-actionable content. If the extractor errors out we fall back
+  // to a single task using the note's raw title/body so the user is
+  // never silently dropped. Returns the number of tasks actually
+  // created so the caller can confirm "3 tasks created".
+  async function handleConvertNoteToTask(n: ScratchNote): Promise<number> {
+    type Extracted = {
+      title: string;
+      description: string;
+      priority: "low" | "medium" | "high";
+      task_type: "general" | "communication" | "purchase" | "verification";
+    };
+
+    let tasks: Extracted[] = [];
     try {
-      const { error } = await supabase.from("tasks").insert({
+      const res = await fetch("/api/notes/extract-tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: n.title ?? "", body: n.body ?? "" }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { tasks: Extracted[] };
+        if (Array.isArray(data.tasks) && data.tasks.length > 0) {
+          tasks = data.tasks;
+        }
+      }
+    } catch {
+      // Network/extractor failure — fall through to the single-task fallback.
+    }
+
+    if (tasks.length === 0) {
+      tasks = [
+        {
+          title: n.title?.trim() || "Note action item",
+          description: n.body?.trim() ?? "",
+          priority: "medium",
+          task_type: "general",
+        },
+      ];
+    }
+
+    try {
+      const rows = tasks.map((t) => ({
         project_id: projectId,
-        title: n.title?.trim() || "Note action item",
-        description: n.body ?? null,
+        title: t.title.slice(0, 200),
+        description: t.description?.trim() ? t.description : null,
         status: "not_started",
-        task_type: "general",
-        priority: "medium",
+        task_type: t.task_type,
+        priority: t.priority,
         linked_module: "notes",
         linked_record_id: n.id,
-      });
+      }));
+      const { error } = await supabase.from("tasks").insert(rows);
       if (error) throw error;
+      return tasks.length;
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to convert to task",
@@ -563,24 +603,26 @@ function ScratchSection({
   onAdd: () => Promise<void>;
   onOpen: (n: ScratchNote) => void;
   onDelete: (id: string) => Promise<void>;
-  onConvertToTask: (n: ScratchNote) => Promise<void>;
+  onConvertToTask: (n: ScratchNote) => Promise<number>;
   onPromoteToMessage: (n: ScratchNote) => Promise<void>;
 }) {
   const [convertingId, setConvertingId] = useState<string | null>(null);
-  const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set());
+  const [convertedCounts, setConvertedCounts] = useState<
+    Record<string, number>
+  >({});
   const [promotingId, setPromotingId] = useState<string | null>(null);
   async function handleConvert(n: ScratchNote) {
     setConvertingId(n.id);
     try {
-      await onConvertToTask(n);
-      setConvertedIds((prev) => new Set([...prev, n.id]));
+      const count = await onConvertToTask(n);
+      setConvertedCounts((prev) => ({ ...prev, [n.id]: count }));
       setTimeout(() => {
-        setConvertedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(n.id);
+        setConvertedCounts((prev) => {
+          const next = { ...prev };
+          delete next[n.id];
           return next;
         });
-      }, 2500);
+      }, 3500);
     } finally {
       setConvertingId(null);
     }
@@ -686,19 +728,21 @@ function ScratchSection({
                       handleConvert(n);
                     }}
                     disabled={
-                      convertingId === n.id || convertedIds.has(n.id)
+                      convertingId === n.id || convertedCounts[n.id] != null
                     }
                     className={`rounded-md border px-2 py-0.5 text-[10px] transition disabled:opacity-100 ${
-                      convertedIds.has(n.id)
+                      convertedCounts[n.id] != null
                         ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                         : "border-zinc-800 bg-zinc-950 text-zinc-300 hover:border-blue-500 hover:text-blue-400"
                     }`}
-                    title="Create a Task in Work from this note"
+                    title="Extract clean Tasks from this note via Claude"
                   >
-                    {convertedIds.has(n.id)
-                      ? "✓ Task created"
+                    {convertedCounts[n.id] != null
+                      ? convertedCounts[n.id] === 1
+                        ? "✓ Task created"
+                        : `✓ ${convertedCounts[n.id]} tasks created`
                       : convertingId === n.id
-                        ? "…"
+                        ? "Extracting…"
                         : "→ Task"}
                   </button>
                   <button
