@@ -374,6 +374,10 @@ export function ScheduleModule({ projectId }: ModuleProps) {
       <div className="flex flex-wrap items-center gap-3">
         <BarChart3 className="h-6 w-6 text-blue-400" />
         <h1 className="text-2xl font-semibold text-zinc-100">Schedule</h1>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <ViewSwitcher value={view} onChange={setView} />
         <div className="ml-auto flex items-center gap-2">
           {zoomable && (
             <div className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 p-0.5">
@@ -434,8 +438,6 @@ export function ScheduleModule({ projectId }: ModuleProps) {
           )}
         </div>
       </div>
-
-      <ViewSwitcher value={view} onChange={setView} />
 
       {loading && <p className="text-sm text-zinc-500">Loading…</p>}
       {error && <p className="text-sm text-red-400">Error: {error}</p>}
