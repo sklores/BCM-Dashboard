@@ -440,29 +440,33 @@ function SortablePhaseRow({
                 </span>
               )}
           </div>
-          <label
-            className={`ml-auto inline-flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] transition ${
+          <button
+            type="button"
+            disabled={!editable}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!editable) return;
+              handlers.onUpdatePhase(phase.id, {
+                is_milestone: !phase.is_milestone,
+              });
+            }}
+            title={
+              phase.is_milestone
+                ? "Milestone — click to remove from Milestone view"
+                : "Mark as milestone (shows in Milestone view)"
+            }
+            aria-label={
+              phase.is_milestone ? "Remove milestone" : "Mark as milestone"
+            }
+            aria-pressed={phase.is_milestone}
+            className={`ml-auto inline-flex shrink-0 items-center justify-center rounded-full border p-1 transition ${
               phase.is_milestone
                 ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
                 : "border-zinc-800 bg-zinc-900 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
-            } ${editable ? "" : "cursor-default opacity-70"}`}
-            title="Show this phase in the Milestone view"
-            onClick={(e) => e.stopPropagation()}
+            } ${editable ? "cursor-pointer" : "cursor-default opacity-70"}`}
           >
-            <input
-              type="checkbox"
-              checked={phase.is_milestone}
-              disabled={!editable}
-              onChange={(e) =>
-                handlers.onUpdatePhase(phase.id, {
-                  is_milestone: e.target.checked,
-                })
-              }
-              className="h-3 w-3 cursor-pointer rounded border-zinc-700 bg-zinc-900 text-amber-400 focus:ring-1 focus:ring-amber-500 focus:ring-offset-0 disabled:cursor-default [color-scheme:dark]"
-            />
-            <Flag className="h-3 w-3" />
-            Milestone
-          </label>
+            <Flag className="h-3.5 w-3.5" />
+          </button>
         </div>
       </td>
       <td className="px-3 py-2">
