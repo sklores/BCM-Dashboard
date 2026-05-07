@@ -149,6 +149,8 @@ export function ContactsModule({ projectId }: ModuleProps) {
     });
   }, [contacts, companies, search, roleFilter]);
 
+  const filtersActive = roleFilter !== "all" || search.trim() !== "";
+
   const groupedByCategory = useMemo(() => {
     // Build companies-with-contacts for each of the seven canonical categories,
     // plus an "Uncategorized" bucket for any legacy company without a category.
@@ -163,6 +165,14 @@ export function ContactsModule({ projectId }: ModuleProps) {
         orphans.push(c);
       }
     }
+    // When a role / search filter is active, hide empty company boxes
+    // so the user only sees boxes with matching contacts.
+    function withRows(co: Company) {
+      return { company: co, rows: contactsByCompany.get(co.id) ?? [] };
+    }
+    function keep(entry: { company: Company; rows: Contact[] }) {
+      return filtersActive ? entry.rows.length > 0 : true;
+    }
     const sections: Array<{
       key: string;
       label: string;
@@ -174,21 +184,17 @@ export function ContactsModule({ projectId }: ModuleProps) {
       category: cat,
       companies: companies
         .filter((c) => c.category === cat)
-        .map((co) => ({
-          company: co,
-          rows: contactsByCompany.get(co.id) ?? [],
-        })),
+        .map(withRows)
+        .filter(keep),
     }));
     const uncategorizedCompanies = companies
       .filter((c) => !c.category)
-      .map((co) => ({
-        company: co,
-        rows: contactsByCompany.get(co.id) ?? [],
-      }));
+      .map(withRows)
+      .filter(keep);
     const showUncategorized =
       uncategorizedCompanies.length > 0 ||
       orphans.length > 0 ||
-      categoryMissing;
+      (categoryMissing && !filtersActive);
     if (showUncategorized) {
       sections.push({
         key: "__uncategorized__",
@@ -198,7 +204,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
       });
     }
     return { sections, orphans };
-  }, [filteredContacts, companies, categoryMissing]);
+  }, [filteredContacts, companies, categoryMissing, filtersActive]);
 
   async function handleAddCompany(category: CompanyCategory | null = null) {
     const name = window.prompt(
@@ -414,12 +420,26 @@ export function ContactsModule({ projectId }: ModuleProps) {
 
       {!loading && !error && (
         <div className="flex flex-col gap-6">
-          {(categoryMissing
-              ? groupedByCategory.sections.filter(
-                  (s) => s.key === "__uncategorized__",
-                )
-              : groupedByCategory.sections
-            ).map((section) => {
+          {(() => {
+            const visibleSections = (
+              categoryMissing
+                ? groupedByCategory.sections.filter(
+                    (s) => s.key === "__uncategorized__",
+                  )
+                : groupedByCategory.sections
+            ).filter((s) => (filtersActive ? s.companies.length > 0 : true));
+            if (
+              filtersActive &&
+              visibleSections.length === 0 &&
+              groupedByCategory.orphans.length === 0
+            ) {
+              return (
+                <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/30 p-6 text-center text-sm text-zinc-500">
+                  No contacts match the current filter.
+                </div>
+              );
+            }
+            return visibleSections.map((section) => {
               const isCollapsed = collapsed.has(section.key);
               const peopleCount = section.companies.reduce(
                 (sum, { rows }) => sum + rows.length,
@@ -533,7 +553,8 @@ export function ContactsModule({ projectId }: ModuleProps) {
                 ))}
               </div>
               );
-            })}
+            });
+          })()}
             {groupedByCategory.orphans.length > 0 && (
               <div className="flex flex-col gap-2">
                 <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
