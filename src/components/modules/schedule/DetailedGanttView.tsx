@@ -48,14 +48,6 @@ import type {
   TaskPatch,
 } from "./queries";
 
-type Zoom = "weekly" | "monthly" | "full";
-
-const ZOOMS: { key: Zoom; label: string }[] = [
-  { key: "weekly", label: "Weekly" },
-  { key: "monthly", label: "Monthly" },
-  { key: "full", label: "Full Project" },
-];
-
 const STATUS_OPTIONS: ScheduleStatus[] = [
   "not_started",
   "in_progress",
@@ -139,7 +131,6 @@ export function DetailedGanttView({
 }) {
   const role = useRole();
   const editable = canEdit(role);
-  const [zoom, setZoom] = useState<Zoom>("monthly");
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(
     () => new Set(phases.map((p) => p.id)),
   );
@@ -208,8 +199,7 @@ export function DetailedGanttView({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <ZoomControl value={zoom} onChange={setZoom} />
+      <div className="flex items-center justify-end gap-3">
         <button
           type="button"
           disabled
@@ -1023,36 +1013,6 @@ function StatusCell({
         ))}
       </select>
     </span>
-  );
-}
-
-function ZoomControl({
-  value,
-  onChange,
-}: {
-  value: Zoom;
-  onChange: (z: Zoom) => void;
-}) {
-  return (
-    <div className="inline-flex rounded-md border border-zinc-800 bg-zinc-900 p-0.5 text-xs">
-      {ZOOMS.map((z) => {
-        const active = z.key === value;
-        return (
-          <button
-            key={z.key}
-            type="button"
-            onClick={() => onChange(z.key)}
-            className={`rounded px-3 py-1 transition ${
-              active
-                ? "bg-zinc-800 text-zinc-100"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            {z.label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
