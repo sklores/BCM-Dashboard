@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { writeTimelineEvent } from "@/lib/timeline";
 import type { Photo } from "./types";
 
 const COLUMNS =
@@ -52,6 +53,33 @@ export async function insertPhoto(row: {
     .select(COLUMNS)
     .single();
   if (error) throw error;
+  // Don't write a timeline event for derived/annotated photos — those
+  // are the result of someone marking up an existing photo, not a new
+  // upload.
+  if (!row.annotated_from_id) {
+    const photo = data as Photo;
+    const summary =
+      photo.ai_description ||
+      (photo.tags && photo.tags.length > 0
+        ? `Tagged: ${photo.tags.slice(0, 3).join(", ")}`
+        : "");
+    writeTimelineEvent({
+      projectId: row.project_id,
+      moduleKey: "photos",
+      eventType: "photo_uploaded",
+      title: summary
+        ? `Photo uploaded — ${summary}`
+        : "Photo uploaded",
+      details: {
+        room: photo.room,
+        stage: photo.stage,
+        tags: photo.tags,
+        storage_url: photo.storage_url,
+      },
+      refTable: "photos",
+      refId: photo.id,
+    });
+  }
   return data as Photo;
 }
 

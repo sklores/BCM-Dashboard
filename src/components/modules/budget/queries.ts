@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { writeTimelineEvent } from "@/lib/timeline";
 import type {
   BudgetClarification,
   BudgetClarificationPatch,
@@ -8,6 +9,33 @@ import type {
   BudgetLineItemPatch,
   ClarSection,
 } from "./types";
+
+// Human-readable field labels for Budget timeline diffs.
+const LINE_FIELD_LABELS: Record<string, string> = {
+  description: "description",
+  quantity: "quantity",
+  unit_measure: "unit",
+  material_allowance: "material allowance",
+  material_unit_price: "material unit price",
+  hours: "hours",
+  hourly_rate: "hourly rate",
+  contractor_cost: "contractor cost",
+  notes: "notes",
+  status: "status",
+  sent_to_owner_at: "sent to owner",
+};
+
+const DIV_FIELD_LABELS: Record<string, string> = {
+  csi_code: "CSI code",
+  name: "name",
+};
+
+function fmtVal(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "string") return v;
+  return JSON.stringify(v);
+}
 
 const DIV_COLUMNS =
   "id, project_id, csi_code, name, sort_order, created_at";
@@ -52,11 +80,47 @@ export async function updateDivision(
   id: string,
   patch: BudgetDivisionPatch,
 ): Promise<void> {
+  // Snapshot the prior row so we can diff for the Timeline event.
+  const { data: prior } = await supabase
+    .from("budget_divisions")
+    .select("project_id, csi_code, name")
+    .eq("id", id)
+    .single();
   const { error } = await supabase
     .from("budget_divisions")
     .update(patch)
     .eq("id", id);
   if (error) throw error;
+  if (prior) {
+    const priorRow = prior as Record<string, unknown> & {
+      project_id: string;
+      name: string | null;
+    };
+    const changes: Array<{ field: string; from: unknown; to: unknown }> = [];
+    for (const key of Object.keys(patch) as Array<keyof BudgetDivisionPatch>) {
+      const from = priorRow[key as string];
+      const to = (patch as Record<string, unknown>)[key as string];
+      if (from !== to) changes.push({ field: key as string, from, to });
+    }
+    if (changes.length > 0) {
+      const fields = changes
+        .map(
+          (c) =>
+            `${DIV_FIELD_LABELS[c.field] ?? c.field}: ${fmtVal(c.from)} → ${fmtVal(c.to)}`,
+        )
+        .join(", ");
+      const divLabel = priorRow.name || "(unnamed division)";
+      writeTimelineEvent({
+        projectId: priorRow.project_id,
+        moduleKey: "budget",
+        eventType: "division_updated",
+        title: `Division "${divLabel}" — ${fields}`,
+        details: { changes },
+        refTable: "budget_divisions",
+        refId: id,
+      });
+    }
+  }
 }
 
 export async function deleteDivision(id: string): Promise<void> {
@@ -106,11 +170,55 @@ export async function updateLineItem(
   id: string,
   patch: BudgetLineItemPatch,
 ): Promise<void> {
+  // Snapshot prior values for the patched fields so we can write a
+  // diff into Timeline. Only the fields actually being patched are
+  // selected — keeps the round trip small.
+  const fieldsToCheck = Object.keys(patch);
+  let prior: Record<string, unknown> | null = null;
+  if (fieldsToCheck.length > 0) {
+    const cols = ["project_id", "description", ...fieldsToCheck]
+      .filter((v, i, a) => a.indexOf(v) === i)
+      .join(", ");
+    const { data } = await supabase
+      .from("budget_line_items")
+      .select(cols)
+      .eq("id", id)
+      .single();
+    prior = (data as Record<string, unknown> | null) ?? null;
+  }
   const { error } = await supabase
     .from("budget_line_items")
     .update(patch)
     .eq("id", id);
   if (error) throw error;
+  if (prior) {
+    const changes: Array<{ field: string; from: unknown; to: unknown }> = [];
+    for (const key of fieldsToCheck) {
+      const from = prior[key];
+      const to = (patch as Record<string, unknown>)[key];
+      if (from !== to) changes.push({ field: key, from, to });
+    }
+    if (changes.length > 0) {
+      const fields = changes
+        .map(
+          (c) =>
+            `${LINE_FIELD_LABELS[c.field] ?? c.field}: ${fmtVal(c.from)} → ${fmtVal(c.to)}`,
+        )
+        .join(", ");
+      const desc =
+        (prior.description as string | null | undefined) ||
+        "(unnamed line item)";
+      writeTimelineEvent({
+        projectId: prior.project_id as string,
+        moduleKey: "budget",
+        eventType: "line_item_updated",
+        title: `Line item "${desc}" — ${fields}`,
+        details: { changes },
+        refTable: "budget_line_items",
+        refId: id,
+      });
+    }
+  }
 }
 
 export async function deleteLineItem(id: string): Promise<void> {

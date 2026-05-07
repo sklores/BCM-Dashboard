@@ -1,13 +1,16 @@
 import { supabase } from "@/lib/supabase";
-import type {
-  MaterialCatalogOption,
-  ProjectSubOption,
-  ProjectTeamOption,
-  ScheduleMaterialCard,
-  SchedulePhase,
-  ScheduleTask,
-  ScheduleSubtask,
-  ScheduleMilestone,
+import { writeTimelineEvent } from "@/lib/timeline";
+import {
+  STATUS_LABEL,
+  type MaterialCatalogOption,
+  type ProjectSubOption,
+  type ProjectTeamOption,
+  type ScheduleMaterialCard,
+  type SchedulePhase,
+  type ScheduleStatus,
+  type ScheduleTask,
+  type ScheduleSubtask,
+  type ScheduleMilestone,
 } from "./types";
 
 const PHASE_COLUMNS =
@@ -180,20 +183,104 @@ export type MaterialCardPatch = Partial<
   Pick<ScheduleMaterialCard, "material_id" | "instructions" | "pdf_url">
 >;
 
+type PhasePriorSnapshot = {
+  project_id: string;
+  name: string;
+  status: ScheduleStatus;
+};
+type TaskPriorSnapshot = {
+  phase_id: string;
+  name: string;
+  status: ScheduleStatus;
+};
+
 export async function updatePhase(id: string, patch: PhasePatch): Promise<void> {
+  // If the patch includes a status change, capture the prior value so
+  // we can write a Timeline event with the from→to transition.
+  let prior: PhasePriorSnapshot | null = null;
+  if (patch.status !== undefined) {
+    const { data } = await supabase
+      .from("schedule_phases")
+      .select("project_id, name, status")
+      .eq("id", id)
+      .single();
+    if (data) prior = data as unknown as PhasePriorSnapshot;
+  }
   const { error } = await supabase
     .from("schedule_phases")
     .update(patch)
     .eq("id", id);
   if (error) throw error;
+  if (
+    prior &&
+    patch.status !== undefined &&
+    patch.status !== null &&
+    patch.status !== prior.status
+  ) {
+    writeTimelineEvent({
+      projectId: prior.project_id,
+      moduleKey: "schedule",
+      eventType: "phase_status_changed",
+      title: `Phase "${prior.name}" → ${STATUS_LABEL[patch.status]}`,
+      details: {
+        from: prior.status,
+        to: patch.status,
+        from_label: STATUS_LABEL[prior.status],
+        to_label: STATUS_LABEL[patch.status],
+      },
+      refTable: "schedule_phases",
+      refId: id,
+    });
+  }
 }
 
 export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
+  let prior: TaskPriorSnapshot | null = null;
+  let projectId: string | null = null;
+  if (patch.status !== undefined) {
+    const { data } = await supabase
+      .from("schedule_tasks")
+      .select("phase_id, name, status")
+      .eq("id", id)
+      .single();
+    if (data) {
+      prior = data as unknown as TaskPriorSnapshot;
+      const { data: phase } = await supabase
+        .from("schedule_phases")
+        .select("project_id")
+        .eq("id", prior.phase_id)
+        .single();
+      projectId =
+        (phase as { project_id: string } | null)?.project_id ?? null;
+    }
+  }
   const { error } = await supabase
     .from("schedule_tasks")
     .update(patch)
     .eq("id", id);
   if (error) throw error;
+  if (
+    prior &&
+    projectId &&
+    patch.status !== undefined &&
+    patch.status !== null &&
+    patch.status !== prior.status
+  ) {
+    writeTimelineEvent({
+      projectId,
+      moduleKey: "schedule",
+      eventType: "task_status_changed",
+      title: `Task "${prior.name}" → ${STATUS_LABEL[patch.status]}`,
+      details: {
+        from: prior.status,
+        to: patch.status,
+        from_label: STATUS_LABEL[prior.status],
+        to_label: STATUS_LABEL[patch.status],
+      },
+      refTable: "schedule_tasks",
+      refId: id,
+    });
+  }
 }
 
 export async function updateSubtask(
