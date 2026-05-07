@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   BarChart3,
+  FileUp,
   Maximize2,
   Minimize2,
   ZoomIn,
@@ -420,6 +421,17 @@ export function ScheduleModule({ projectId }: ModuleProps) {
             )}
             {fullscreen ? "Exit full screen" : "Full screen"}
           </button>
+          {view === "detailed" && (
+            <button
+              type="button"
+              disabled
+              className="flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-500"
+              title="Coming soon"
+            >
+              <FileUp className="h-3.5 w-3.5" />
+              Import from MS Project PDF
+            </button>
+          )}
         </div>
       </div>
 
