@@ -5,7 +5,6 @@ import {
   Briefcase,
   ChevronDown,
   ChevronRight,
-  FileUp,
   Flag,
   GripVertical,
   Package,
@@ -198,19 +197,7 @@ export function DetailedGanttView({
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-end gap-3">
-        <button
-          type="button"
-          disabled
-          className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-500"
-          title="Coming soon"
-        >
-          <FileUp className="h-3.5 w-3.5" />
-          Import from MS Project PDF
-        </button>
-      </div>
-
+    <div className="flex flex-col gap-3">
       {!editable && (
         <p className="text-xs text-zinc-500">
           View only — your role ({role}) cannot edit tasks.

@@ -366,8 +366,8 @@ export function ScheduleModule({ projectId }: ModuleProps) {
     <div
       className={
         fullscreen
-          ? "fixed inset-0 z-40 flex flex-col gap-6 overflow-y-auto bg-zinc-950 p-10"
-          : "flex flex-col gap-6"
+          ? "fixed inset-0 z-40 flex flex-col gap-3 overflow-y-auto bg-zinc-950 p-10"
+          : "flex flex-col gap-3"
       }
     >
       <div className="flex flex-wrap items-center gap-3">
@@ -440,7 +440,7 @@ export function ScheduleModule({ projectId }: ModuleProps) {
                   }
                 : undefined
             }
-            className="flex flex-col gap-6"
+            className="flex flex-col gap-3"
           >
           {view === "gantt" && (
             <GanttView phases={phases} tasks={tasks} subtasks={subtasks} />
