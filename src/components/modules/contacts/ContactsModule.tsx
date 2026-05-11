@@ -369,14 +369,14 @@ export function ContactsModule({ projectId }: ModuleProps) {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
+        <div className="relative min-w-[18rem] flex-1 sm:flex-none">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, email, phone…"
-            className="w-72 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 pl-8 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 pl-8 text-sm text-zinc-200 outline-none placeholder:text-zinc-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 sm:w-80"
           />
         </div>
         <select
@@ -391,28 +391,27 @@ export function ContactsModule({ projectId }: ModuleProps) {
             </option>
           ))}
         </select>
-        <div className="ml-auto flex items-center gap-2">
-          {canCreate && (
-            <>
-              <button
-                type="button"
-                onClick={handleAddContactByRole}
-                className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add contact
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddCompany(null)}
-                className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add company
-              </button>
-            </>
-          )}
-        </div>
+        {canCreate && (
+          <div className="ml-auto inline-flex overflow-hidden rounded-md border border-zinc-800">
+            <button
+              type="button"
+              onClick={handleAddContactByRole}
+              className="flex items-center gap-1.5 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-800 hover:text-blue-400"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add contact
+            </button>
+            <div className="w-px bg-zinc-800" aria-hidden />
+            <button
+              type="button"
+              onClick={() => handleAddCompany(null)}
+              className="flex items-center gap-1.5 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-800 hover:text-blue-400"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add company
+            </button>
+          </div>
+        )}
       </div>
 
       {loading && <p className="text-sm text-zinc-500">Loading…</p>}
@@ -446,23 +445,23 @@ export function ContactsModule({ projectId }: ModuleProps) {
                 0,
               );
               return (
-              <div key={section.key} className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 px-1">
+              <section key={section.key} className="flex flex-col gap-2">
+                <header className="flex items-center gap-2 border-b border-zinc-800/80 pb-1.5">
                   <button
                     type="button"
                     onClick={() => toggleCollapse(section.key)}
-                    className="flex flex-1 items-center gap-2 rounded py-0.5 text-left transition hover:text-zinc-300"
+                    className="flex flex-1 items-center gap-2 rounded py-0.5 text-left transition hover:text-zinc-100"
                     aria-expanded={!isCollapsed}
                   >
                     {isCollapsed ? (
-                      <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
+                      <ChevronRight className="h-4 w-4 text-zinc-500" />
                     ) : (
-                      <ChevronDown className="h-3.5 w-3.5 text-zinc-500" />
+                      <ChevronDown className="h-4 w-4 text-zinc-500" />
                     )}
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
                       {section.label}
                     </span>
-                    <span className="text-[10px] text-zinc-600">
+                    <span className="text-[11px] text-zinc-500">
                       {section.companies.length}{" "}
                       {section.companies.length === 1 ? "company" : "companies"}
                       {peopleCount > 0 && ` · ${peopleCount} people`}
@@ -472,14 +471,14 @@ export function ContactsModule({ projectId }: ModuleProps) {
                     <button
                       type="button"
                       onClick={() => handleAddCompany(section.category)}
-                      className="rounded p-0.5 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
+                      className="rounded p-1 text-zinc-500 transition hover:bg-zinc-800 hover:text-blue-400"
                       title={`Add company under ${section.label}`}
                       aria-label={`Add company under ${section.label}`}
                     >
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   )}
-                </div>
+                </header>
                 {!isCollapsed &&
                   (section.companies.length === 0 ? (
                   <div className="rounded-md border border-dashed border-zinc-800 bg-zinc-900/30 p-3 text-xs text-zinc-500">
@@ -488,28 +487,29 @@ export function ContactsModule({ projectId }: ModuleProps) {
                       : "No companies yet — use Add company in the toolbar above."}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {section.companies.map(({ company, rows }) => (
                     <div
                       key={company.id}
-                      className="flex flex-col rounded-md border border-zinc-800 bg-zinc-900/40 transition hover:border-zinc-700"
+                      className="group flex flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/50 transition hover:border-zinc-700 hover:bg-zinc-900"
                     >
                       <button
                         type="button"
                         onClick={() =>
                           setSelection({ kind: "company", id: company.id })
                         }
-                        className="flex w-full items-center gap-2 rounded-t-md border-b border-zinc-800/60 px-3 py-2 text-left transition hover:bg-zinc-900"
+                        className="flex w-full items-center gap-2 border-b border-zinc-800/60 bg-zinc-900/70 px-3 py-2 text-left transition hover:bg-zinc-800/70"
                       >
-                        <Building2 className="h-4 w-4 text-zinc-500" />
-                        <span className="truncate text-sm font-medium text-zinc-200">
+                        <Building2 className="h-4 w-4 shrink-0 text-zinc-400" />
+                        <span className="truncate text-sm font-medium text-zinc-100">
                           {company.company_name?.trim() || (
                             <span className="italic text-zinc-500">
                               Click to fill in name…
                             </span>
                           )}
                         </span>
-                        <span className="ml-auto rounded-full bg-zinc-800/80 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                        <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-zinc-800/80 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                          <UsersIcon className="h-3 w-3" />
                           {rows.length}
                         </span>
                       </button>
@@ -522,7 +522,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
                                   onClick={() =>
                                     setSelection({ kind: "contact", id: c.id })
                                   }
-                                  className="flex w-full items-center gap-3 px-3 py-2 text-left text-zinc-300 transition hover:bg-zinc-900"
+                                  className="flex w-full items-center gap-3 px-3 py-2 text-left text-zinc-300 transition hover:bg-zinc-800/40"
                                 >
                                   <UserCircle2 className="h-4 w-4 shrink-0 text-zinc-500" />
                                   <div className="min-w-0 flex-1">
@@ -543,24 +543,37 @@ export function ContactsModule({ projectId }: ModuleProps) {
                           ))}
                         </ul>
                       ) : (
-                        <p className="px-3 py-2 text-[11px] text-zinc-600">
-                          No contacts yet — open this card to add one.
-                        </p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelection({ kind: "company", id: company.id })
+                          }
+                          className="px-3 py-2 text-left text-[11px] italic text-zinc-600 transition hover:text-blue-400"
+                          title="Open this company card to add a contact"
+                        >
+                          + add contact
+                        </button>
                       )}
                     </div>
                   ))}
                   </div>
                 ))}
-              </div>
+              </section>
               );
             });
           })()}
             {groupedByCategory.orphans.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <div className="px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-                  Unaffiliated contacts
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <section className="flex flex-col gap-2">
+                <header className="flex items-center gap-2 border-b border-zinc-800/80 pb-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                    Unaffiliated contacts
+                  </span>
+                  <span className="text-[11px] text-zinc-500">
+                    {groupedByCategory.orphans.length}{" "}
+                    {groupedByCategory.orphans.length === 1 ? "person" : "people"}
+                  </span>
+                </header>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {groupedByCategory.orphans.map((c) => (
                     <button
                       key={c.id}
@@ -587,7 +600,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
                     </button>
                   ))}
                 </div>
-              </div>
+              </section>
             )}
         </div>
       )}
