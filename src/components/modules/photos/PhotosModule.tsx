@@ -28,6 +28,8 @@ const GROUPS: { key: GroupMode; label: string }[] = [
   { key: "none", label: "Ungrouped" },
 ];
 
+type KindFilter = "all" | "photo" | "pdf";
+
 export function PhotosModule({ projectId }: ModuleProps) {
   const role = useRole();
   const editable = canEdit(role);
@@ -37,6 +39,7 @@ export function PhotosModule({ projectId }: ModuleProps) {
   const [group, setGroup] = useState<GroupMode>("date");
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<Set<string>>(new Set());
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [selected, setSelected] = useState<Photo | null>(null);
   const [annotating, setAnnotating] = useState<Photo | null>(null);
   const [tagsOpen, setTagsOpen] = useState(false);
@@ -136,9 +139,21 @@ export function PhotosModule({ projectId }: ModuleProps) {
     return Array.from(set).sort();
   }, [photos]);
 
+  // Kind counts for the filter tabs.
+  const kindCounts = useMemo(() => {
+    let photoCount = 0;
+    let pdfCount = 0;
+    for (const p of photos) {
+      if (p.kind === "pdf") pdfCount++;
+      else photoCount++;
+    }
+    return { photo: photoCount, pdf: pdfCount, all: photos.length };
+  }, [photos]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return photos.filter((p) => {
+      if (kindFilter !== "all" && p.kind !== kindFilter) return false;
       if (activeTags.size > 0) {
         for (const t of activeTags) if (!p.tags.includes(t)) return false;
       }
@@ -148,7 +163,7 @@ export function PhotosModule({ projectId }: ModuleProps) {
       }
       return true;
     });
-  }, [photos, search, activeTags]);
+  }, [photos, search, activeTags, kindFilter]);
 
   function toggleTag(tag: string) {
     setActiveTags((prev) => {
@@ -229,6 +244,37 @@ export function PhotosModule({ projectId }: ModuleProps) {
       {!loading && !error && (
         <>
           <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex rounded-md border border-zinc-800 bg-zinc-900 p-0.5 text-xs">
+              {(
+                [
+                  { key: "all" as const, label: "All" },
+                  { key: "photo" as const, label: "Photos" },
+                  { key: "pdf" as const, label: "PDFs" },
+                ]
+              ).map((k) => {
+                const active = k.key === kindFilter;
+                const count = kindCounts[k.key];
+                return (
+                  <button
+                    key={k.key}
+                    type="button"
+                    onClick={() => setKindFilter(k.key)}
+                    className={`rounded px-3 py-1 transition ${
+                      active
+                        ? "bg-zinc-800 text-zinc-100"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    {k.label}
+                    {count > 0 && (
+                      <span className="ml-1 text-[10px] text-zinc-500">
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
             <div className="inline-flex rounded-md border border-zinc-800 bg-zinc-900 p-0.5 text-xs">
               {GROUPS.map((g) => {
                 const active = g.key === group;

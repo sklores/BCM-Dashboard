@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Trash2, X } from "lucide-react";
+import { FileText, Pencil, Trash2, X } from "lucide-react";
 import type { GroupMode, Photo } from "./types";
 
 function formatDate(s: string | null): string {
@@ -94,6 +94,28 @@ export function Gallery({
 }
 
 function Thumb({ photo, onClick }: { photo: Photo; onClick: () => void }) {
+  // PDFs open in a new tab on click (no in-app viewer yet). Photos
+  // open the PhotoModal via the caller's onSelect/onClick.
+  if (photo.kind === "pdf") {
+    return (
+      <a
+        href={photo.storage_url ?? "#"}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 p-3 text-center transition hover:border-zinc-600"
+      >
+        <div className="flex h-12 w-12 items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 text-red-300">
+          <FileText className="h-6 w-6" />
+        </div>
+        <div className="line-clamp-2 text-[11px] text-zinc-300">
+          {photo.ai_description ?? photo.notes ?? "PDF"}
+        </div>
+        <span className="rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
+          PDF
+        </span>
+      </a>
+    );
+  }
   return (
     <button
       type="button"

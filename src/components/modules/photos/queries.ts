@@ -3,7 +3,7 @@ import { writeTimelineEvent } from "@/lib/timeline";
 import type { Photo } from "./types";
 
 const COLUMNS =
-  "id, project_id, storage_path, storage_url, taken_at, tags, room, stage, ai_description, notes, uploaded_at, annotated_from_id";
+  "id, project_id, kind, storage_path, storage_url, taken_at, tags, room, stage, ai_description, notes, uploaded_at, annotated_from_id";
 
 export async function fetchPhotos(projectId: string): Promise<Photo[]> {
   const { data, error } = await supabase

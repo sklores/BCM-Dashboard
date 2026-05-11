@@ -1,6 +1,9 @@
+export type PhotoKind = "photo" | "pdf";
+
 export type Photo = {
   id: string;
   project_id: string;
+  kind: PhotoKind;
   storage_path: string;
   storage_url: string | null;
   taken_at: string | null;

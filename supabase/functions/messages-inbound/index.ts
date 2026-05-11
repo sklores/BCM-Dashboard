@@ -137,12 +137,19 @@ function extForContentType(ct: string): string {
   if (m.includes("webp")) return "webp";
   if (m.includes("gif")) return "gif";
   if (m.includes("heic")) return "heic";
+  if (m.includes("pdf")) return "pdf";
   return "bin";
 }
 
 function isImage(ct: string | undefined): boolean {
   if (!ct) return false;
   return ct.toLowerCase().startsWith("image/");
+}
+
+function isPdf(ct: string | undefined, name?: string): boolean {
+  if (ct && ct.toLowerCase().includes("pdf")) return true;
+  if (name && name.toLowerCase().endsWith(".pdf")) return true;
+  return false;
 }
 
 async function analyzeWithClaude(
@@ -296,17 +303,30 @@ Deno.serve(async (req) => {
     return Response.json({ error: msgErr.message }, { status: 500 });
   }
 
-  // 2. Process image attachments → photos module.
-  const photoSummaries: Array<{
+  // 2. Process attachments → photos module.
+  //    Images: upload + Claude vision tagging + kind='photo'
+  //    PDFs:   upload as-is + kind='pdf' (no vision call)
+  //    Other:  dropped silently (no destination module yet)
+  const attachmentSummaries: Array<{
     project_id: string;
     photo_id: string;
+    kind: "photo" | "pdf";
     name: string;
     tagged: boolean;
   }> = [];
   const attachments = payload.Attachments ?? [];
   for (const att of attachments) {
-    if (!att.Content || !isImage(att.ContentType)) continue;
-    const ext = extForContentType(att.ContentType!);
+    if (!att.Content) continue;
+    const image = isImage(att.ContentType);
+    const pdf = !image && isPdf(att.ContentType, att.Name);
+    if (!image && !pdf) continue;
+    const kind: "photo" | "pdf" = image ? "photo" : "pdf";
+    const ext = image
+      ? extForContentType(att.ContentType!)
+      : "pdf";
+    const contentType =
+      att.ContentType ?? (image ? "image/jpeg" : "application/pdf");
+
     let bytes: Uint8Array;
     try {
       bytes = base64ToBytes(att.Content);
@@ -315,8 +335,8 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    // One upload per matched project so each project sees the photo
-    // independently. (Typical case = 1 project, so 1 upload.)
+    // One upload per matched project so each project sees the
+    // attachment independently. (Typical case = 1 project.)
     for (const project of projects) {
       const photoId = crypto.randomUUID();
       const path = `${project.id}/${photoId}.${ext}`;
@@ -325,7 +345,7 @@ Deno.serve(async (req) => {
         .upload(path, bytes, {
           cacheControl: "3600",
           upsert: false,
-          contentType: att.ContentType ?? "image/jpeg",
+          contentType,
         });
       if (upErr) {
         console.error("[messages-inbound] storage upload failed", upErr);
@@ -334,29 +354,35 @@ Deno.serve(async (req) => {
       const { data: pub } = supabase.storage.from("photos").getPublicUrl(path);
       const publicUrl = pub.publicUrl;
 
-      // Run Claude vision against the public URL. If it fails or we
-      // have no API key, we still insert the photo — just without
-      // ai_description/tags. Better the photo show up than disappear.
-      const analysis = await analyzeWithClaude(publicUrl);
+      // Vision tagging only for images. PDFs go in untagged for now —
+      // text extraction could come later via pdf.js in a follow-up.
+      const analysis = image ? await analyzeWithClaude(publicUrl) : null;
+
+      // ai_description for PDFs: fall back to the original filename so
+      // the card has something readable rather than just "PDF".
+      const aiDescription = analysis?.description ?? (pdf ? att.Name ?? null : null);
+
       const { error: photoErr } = await supabase.from("photos").insert({
         id: photoId,
         project_id: project.id as string,
+        kind,
         storage_path: path,
         storage_url: publicUrl,
         taken_at: receivedAt,
-        tags: analysis?.tags ?? [],
+        tags: analysis?.tags ?? (pdf ? ["pdf"] : []),
         room: analysis?.room ?? null,
         stage: analysis?.stage ?? null,
-        ai_description: analysis?.description ?? null,
+        ai_description: aiDescription,
       });
       if (photoErr) {
         console.error("[messages-inbound] photo insert failed", photoErr);
         continue;
       }
-      photoSummaries.push({
+      attachmentSummaries.push({
         project_id: project.id as string,
         photo_id: photoId,
-        name: att.Name ?? `photo.${ext}`,
+        kind,
+        name: att.Name ?? `${kind}.${ext}`,
         tagged: !!analysis,
       });
     }
@@ -365,7 +391,9 @@ Deno.serve(async (req) => {
   return Response.json({
     accepted: true,
     messages_inserted: messageRows.length,
-    photos_inserted: photoSummaries.length,
-    photos: photoSummaries,
+    attachments_inserted: attachmentSummaries.length,
+    photos_inserted: attachmentSummaries.filter((a) => a.kind === "photo").length,
+    pdfs_inserted: attachmentSummaries.filter((a) => a.kind === "pdf").length,
+    attachments: attachmentSummaries,
   });
 });
