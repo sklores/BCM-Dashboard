@@ -487,7 +487,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
                       : "No companies yet — use Add company in the toolbar above."}
                   </div>
                 ) : (
-                  <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+                  <div className="grid grid-cols-2 gap-3 [&>:last-child:nth-child(odd)]:col-span-2">
                   {section.companies.map(({ company, rows }) => (
                     <div
                       key={company.id}
@@ -573,7 +573,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
                     {groupedByCategory.orphans.length === 1 ? "person" : "people"}
                   </span>
                 </header>
-                <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+                <div className="grid grid-cols-2 gap-3 [&>:last-child:nth-child(odd)]:col-span-2">
                   {groupedByCategory.orphans.map((c) => (
                     <button
                       key={c.id}
