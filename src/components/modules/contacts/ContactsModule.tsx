@@ -487,11 +487,11 @@ export function ContactsModule({ projectId }: ModuleProps) {
                       : "No companies yet — use Add company in the toolbar above."}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-3 [&>:last-child:nth-child(odd)]:col-span-2">
+                  <div className="flex flex-wrap gap-3">
                   {section.companies.map(({ company, rows }) => (
                     <div
                       key={company.id}
-                      className="group flex flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/50 transition hover:border-zinc-700 hover:bg-zinc-900"
+                      className="group flex w-[280px] flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/50 transition hover:border-zinc-700 hover:bg-zinc-900"
                     >
                       <button
                         type="button"
@@ -573,7 +573,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
                     {groupedByCategory.orphans.length === 1 ? "person" : "people"}
                   </span>
                 </header>
-                <div className="grid grid-cols-2 gap-3 [&>:last-child:nth-child(odd)]:col-span-2">
+                <div className="flex flex-wrap gap-3">
                   {groupedByCategory.orphans.map((c) => (
                     <button
                       key={c.id}
@@ -581,7 +581,7 @@ export function ContactsModule({ projectId }: ModuleProps) {
                       onClick={() =>
                         setSelection({ kind: "contact", id: c.id })
                       }
-                      className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-left text-zinc-300 transition hover:bg-zinc-900"
+                      className="flex w-[280px] items-center gap-3 rounded-md border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-left text-zinc-300 transition hover:bg-zinc-900"
                     >
                       <UserCircle2 className="h-4 w-4 shrink-0 text-zinc-500" />
                       <div className="min-w-0 flex-1">
