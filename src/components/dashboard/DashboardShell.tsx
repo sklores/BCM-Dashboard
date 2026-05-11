@@ -47,6 +47,33 @@ export function DashboardShell({ projects }: Props) {
     }
   }, []);
 
+  // Restore the active module from the URL hash on first mount. Initial
+  // state can't read window during SSR, so we hydrate, then sync. Also
+  // listens for back/forward button so history navigation works.
+  useEffect(() => {
+    function readHash(): string | null {
+      const k = window.location.hash.replace(/^#/, "");
+      return k && modules.some((m) => m.key === k) ? k : null;
+    }
+    const initial = readHash();
+    if (initial) setActiveModuleKey(initial);
+    function onHashChange() {
+      const next = readHash();
+      if (next) setActiveModuleKey(next);
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  // Keep the URL hash in sync with the active module. Uses
+  // replaceState so refreshing or going back doesn't pile up history.
+  useEffect(() => {
+    const desired = `#${activeModuleKey}`;
+    if (typeof window !== "undefined" && window.location.hash !== desired) {
+      window.history.replaceState(null, "", desired);
+    }
+  }, [activeModuleKey]);
+
   // Listen for cross-component navigation requests (top bar search, bell).
   useEffect(() => {
     function onNavigate(e: Event) {
