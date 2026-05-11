@@ -137,8 +137,14 @@ export async function POST(req: Request) {
   // Insert one message row per matched project. If a single email is
   // CC'd to two project addresses (rare but possible — e.g. a sub
   // working on both jobs), both projects get the message.
+  //
+  // Prefer TextBody so forwarded messages carry their full original
+  // content. StrippedTextReply is Postmark's auto-stripped reply
+  // text — useful for clean reply threads but removes the forwarded
+  // payload, which is the whole point of forwarding to the project
+  // address.
   const body =
-    payload.StrippedTextReply || payload.TextBody || payload.HtmlBody || "";
+    payload.TextBody || payload.HtmlBody || payload.StrippedTextReply || "";
   const receivedAt = payload.Date ? new Date(payload.Date).toISOString() : new Date().toISOString();
   const rows = projects.map((p) => ({
     project_id: p.id as string,
