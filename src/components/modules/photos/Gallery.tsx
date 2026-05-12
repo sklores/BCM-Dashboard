@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FileText, Pencil, Trash2, X } from "lucide-react";
+import { Download, ExternalLink, FileText, Pencil, Trash2, X } from "lucide-react";
 import type { GroupMode, Photo } from "./types";
 
 function formatDate(s: string | null): string {
@@ -94,14 +94,13 @@ export function Gallery({
 }
 
 function Thumb({ photo, onClick }: { photo: Photo; onClick: () => void }) {
-  // PDFs open in a new tab on click (no in-app viewer yet). Photos
-  // open the PhotoModal via the caller's onSelect/onClick.
+  // PDFs open in an in-dashboard modal (PdfModal). Caller decides
+  // which modal to show based on photo.kind. Photos open PhotoModal.
   if (photo.kind === "pdf") {
     return (
-      <a
-        href={photo.storage_url ?? "#"}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={onClick}
         className="group relative flex aspect-square flex-col items-center justify-center gap-2 overflow-hidden rounded-md border border-zinc-800 bg-zinc-900 p-3 text-center transition hover:border-zinc-600"
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 text-red-300">
@@ -113,7 +112,7 @@ function Thumb({ photo, onClick }: { photo: Photo; onClick: () => void }) {
         <span className="rounded-full border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-red-300">
           PDF
         </span>
-      </a>
+      </button>
     );
   }
   return (
@@ -305,6 +304,109 @@ export function PhotoModal({
               </button>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// PdfModal — in-dashboard PDF viewer. Renders the PDF via an iframe
+// pointing at the storage URL, which lets the browser's built-in PDF
+// renderer handle the actual pages but keeps the experience inside the
+// app shell. Includes a header with the filename + open-in-new-tab
+// and download links (since some browsers' PDF chrome hides these
+// when embedded), plus a Delete action for PMs.
+export function PdfModal({
+  photo,
+  editable,
+  onClose,
+  onDelete,
+}: {
+  photo: Photo;
+  editable: boolean;
+  onClose: () => void;
+  onDelete: (photo: Photo) => Promise<void>;
+}) {
+  const url = photo.storage_url ?? "";
+  const filename = photo.ai_description?.trim() || "Document.pdf";
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center gap-3 border-b border-zinc-800 px-4 py-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 text-red-300">
+            <FileText className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-zinc-100">
+              {filename}
+            </div>
+            <div className="text-[11px] text-zinc-500">
+              {photo.taken_at
+                ? `Received ${formatDate(photo.taken_at)}`
+                : `Uploaded ${formatDate(photo.uploaded_at)}`}
+            </div>
+          </div>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+            title="Open in new tab"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Open
+          </a>
+          <a
+            href={url}
+            download
+            className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-blue-500 hover:text-blue-400"
+            title="Download"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </a>
+          {editable && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (window.confirm("Delete this PDF?")) {
+                  await onDelete(photo);
+                  onClose();
+                }
+              }}
+              className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-red-500/40 hover:text-red-400"
+              title="Delete PDF"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="flex-1 bg-zinc-900">
+          {url ? (
+            <iframe
+              src={url}
+              title={filename}
+              className="h-full w-full border-0"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-zinc-500">
+              No file URL available.
+            </div>
+          )}
         </div>
       </div>
     </div>

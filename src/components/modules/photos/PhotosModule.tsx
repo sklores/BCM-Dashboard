@@ -11,7 +11,7 @@ import {
 import { canEdit, useRole } from "@/lib/role-context";
 import type { ModuleProps } from "@/components/dashboard/modules";
 import { Uploader } from "./Uploader";
-import { Gallery, PhotoModal } from "./Gallery";
+import { Gallery, PdfModal, PhotoModal } from "./Gallery";
 import { PhotoAnnotator } from "./PhotoAnnotator";
 import {
   deletePhoto,
@@ -380,7 +380,16 @@ export function PhotosModule({ projectId }: ModuleProps) {
             onSelect={setSelected}
           />
 
-          {selected && (
+          {selected && selected.kind === "pdf" && (
+            <PdfModal
+              photo={selected}
+              editable={editable}
+              onClose={() => setSelected(null)}
+              onDelete={handleDelete}
+            />
+          )}
+
+          {selected && selected.kind !== "pdf" && (
             <PhotoModal
               photo={selected}
               editable={editable}
