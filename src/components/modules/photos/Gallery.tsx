@@ -395,12 +395,13 @@ export function PdfModal({
             <X className="h-4 w-4" />
           </button>
         </header>
-        <div className="flex-1 bg-zinc-900">
+        <div className="min-h-0 flex-1 bg-zinc-900">
           {url ? (
             <iframe
               src={url}
               title={filename}
-              className="h-full w-full border-0"
+              className="block border-0"
+              style={{ width: "100%", height: "100%" }}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-zinc-500">
