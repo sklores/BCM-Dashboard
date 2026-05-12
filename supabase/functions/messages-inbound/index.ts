@@ -152,6 +152,50 @@ function isPdf(ct: string | undefined, name?: string): boolean {
   return false;
 }
 
+async function analyzeWithClaudeOnce(
+  apiKey: string,
+  imageUrl: string,
+): Promise<PhotoAnalysis | null> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-opus-4-7",
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "url", url: imageUrl } },
+            { type: "text", text: CLAUDE_VISION_PROMPT },
+          ],
+        },
+      ],
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: CLAUDE_VISION_SCHEMA,
+        },
+      },
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `vision ${res.status}: ${await res.text().catch(() => "<no body>")}`,
+    );
+  }
+  const data = (await res.json()) as {
+    content?: Array<{ type: string; text?: string }>;
+  };
+  const block = data.content?.find((b) => b.type === "text" && b.text);
+  if (!block?.text) throw new Error("vision returned no text block");
+  return JSON.parse(block.text) as PhotoAnalysis;
+}
+
 async function analyzeWithClaude(
   imageUrl: string,
 ): Promise<PhotoAnalysis | null> {
@@ -160,50 +204,23 @@ async function analyzeWithClaude(
     console.warn("[messages-inbound] ANTHROPIC_API_KEY not set — skipping vision");
     return null;
   }
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-7",
-        max_tokens: 1024,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "image", source: { type: "url", url: imageUrl } },
-              { type: "text", text: CLAUDE_VISION_PROMPT },
-            ],
-          },
-        ],
-        output_config: {
-          format: {
-            type: "json_schema",
-            schema: CLAUDE_VISION_SCHEMA,
-          },
-        },
-      }),
-    });
-    if (!res.ok) {
+  // One attempt, then one retry after a short backoff. Vision calls
+  // can fail transiently when Postmark delivers a batch of photos
+  // back-to-back (rate limit blip, network jitter). One retry catches
+  // those without doubling latency on the happy path.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      return await analyzeWithClaudeOnce(apiKey, imageUrl);
+    } catch (err) {
       console.warn(
-        `[messages-inbound] vision request failed ${res.status}: ${await res.text()}`,
+        `[messages-inbound] vision attempt ${attempt} failed`,
+        err instanceof Error ? err.message : err,
       );
-      return null;
+      if (attempt === 2) return null;
+      await new Promise((r) => setTimeout(r, 1500));
     }
-    const data = (await res.json()) as {
-      content?: Array<{ type: string; text?: string }>;
-    };
-    const block = data.content?.find((b) => b.type === "text" && b.text);
-    if (!block?.text) return null;
-    return JSON.parse(block.text) as PhotoAnalysis;
-  } catch (err) {
-    console.warn("[messages-inbound] vision exception", err);
-    return null;
   }
+  return null;
 }
 
 Deno.serve(async (req) => {
