@@ -32,6 +32,11 @@ Follow this every session. It is how this repo ships.
 When something bites you or you learn a convention, record it: `/lesson <one
 line>`. Builds read these first.
 
+## Background builds
+
+`/build <task>` hands a build to the CTO worker in the background;
+`/second-opinion <q>` asks Codex; `/lesson <line>` records a lesson.
+
 ## Before you report status
 
 Run this and say what it shows:
