@@ -28,19 +28,21 @@ signal:
 Run it via Bash. In **this** repo (anddone-cto) prefer the vendored binary:
 
 ```bash
-./apps/worker/node_modules/.bin/codex exec --sandbox read-only --skip-git-repo-check --model gpt-5.6-sol "<the question + the context>"
+./apps/worker/node_modules/.bin/codex exec --sandbox read-only --skip-git-repo-check --model gpt-5.6-sol "<the question + the context>" < /dev/null
 ```
 
 Everywhere else, or when that path does not exist:
 
 ```bash
-npx -y @openai/codex exec --sandbox read-only --skip-git-repo-check --model gpt-5.6-sol "<the question + the context>"
+npx -y @openai/codex exec --sandbox read-only --skip-git-repo-check --model gpt-5.6-sol "<the question + the context>" < /dev/null
 ```
 
 Notes that matter:
 
 - `npx -y @openai/codex` — the **full package name**. A bare `npx codex`
   resolves a different package entirely.
+- `< /dev/null` is not optional either: with stdin open, `codex exec` waits
+  on an interactive prompt forever at 0% CPU (proven live, twice).
 - `--sandbox read-only` is not optional. It is the reason this command is safe
   to run without asking.
 - Pass the question and the context as **one prompt argument**. Quote it
