@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/cto-context.sh",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/cto-context.sh\"",
             "timeout": 20
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/cto-guard.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/cto-guard.sh\""
           }
         ]
       },
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/cto-guard.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/cto-guard.sh\""
           }
         ]
       }
