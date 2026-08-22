@@ -1,0 +1,43 @@
+# The workflow
+
+Follow this every session. It is how this repo ships.
+
+## Branches
+
+- Work happens on `staging`. Check it out before you change anything:
+  `git fetch origin && git checkout staging || git checkout -b staging origin/main`
+- Never commit to `main`.
+- `main` moves ONLY when Steven says "ship it". Shipping is a fast-forward:
+  `git push origin origin/staging:main`
+- "Roll it back" = `git revert <sha>` on `staging`, push staging, then ship.
+- Background jobs (the CTO worker) land on `staging` too. Expect commits you
+  did not write. Fetch before you assume you know the tip.
+
+## The files
+
+- `STATE.md` is the shared memory. Keep it current AS YOU WORK — move items
+  between "In progress", "Staged (not shipped)", "Shipped", "Blocked". A
+  session that ends without updating it has thrown its context away.
+- `NOTES.md` is Steven's. Read it. Never rewrite it.
+- `.claude/rules/cto.md` holds Steven's rules. Obey them. Append only when he
+  asks you to add one.
+
+## Before you report status
+
+Run this and say what it shows:
+
+```
+git log --oneline origin/main..origin/staging
+```
+
+That is what is staged and not shipped. "Done" means shipped, not merged.
+
+## Two hard stops
+
+Stop and ask Steven in person. Do not work around these.
+
+1. Spending money or creating infrastructure — a new Vercel project, a new
+   Supabase project, a paid plan, a domain, anything with a bill.
+2. Destructive database changes — `drop table`, `drop column`, `truncate`,
+   `delete from` in a migration, or editing a migration that already ran.
+   Applied migrations are immutable; write a new numbered one.
