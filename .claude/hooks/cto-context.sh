@@ -100,10 +100,35 @@ if [ -n "$plan" ]; then
   fi
 fi
 
+# THE DESIGN BOARD (Gate 5). One line, not the file: DESIGN.md can be long and
+# the session only needs to know it exists before it designs anything. The
+# count comes from the marker the daemon writes, so nothing here parses
+# markdown.
+design=$(show "DESIGN.md")
+if [ -n "$design" ]; then
+  n=$(printf '%s\n' "$design" | sed -n 's/^<!-- board-items: \([0-9][0-9]*\) -->$/\1/p' | head -1)
+  [ -n "$n" ] || n="some"
+  printf '## Design board: %s items (see DESIGN.md)\nImages under design/board/ are the references — Read them before designing UI.\n\n' "$n" >>"$out"
+fi
+
 if [ "$have_git" = yes ] && has_ref origin/staging && has_ref origin/main; then
   staged=$(git log --oneline origin/main..origin/staging 2>/dev/null | head -15)
   if [ -n "$staged" ]; then
     printf '## Staged, not shipped (git)\n%s\n\n' "$staged" >>"$out"
+  fi
+fi
+
+# THE SHARED BUILD LOG (Gate 5). The daemon mirrors every lesson, from every
+# repo, to ~/.anddone-cto/LESSONS.md once a minute; this prints the newest of
+# them into the session. MAC ONLY, silently: a cloud session has no daemon and
+# no such file, and says nothing rather than explaining its absence.
+#
+# LAST, AND CLIPPED. Everything above is about THIS repo; the 9,000-char cap
+# below must eat cross-repo context before it eats the repo's own.
+if [ -n "${HOME:-}" ] && [ -f "$HOME/.anddone-cto/LESSONS.md" ]; then
+  lessons=$(head -25 "$HOME/.anddone-cto/LESSONS.md" 2>/dev/null | cut -c1-200)
+  if [ -n "$lessons" ]; then
+    printf '## Lessons (all repos)\n%s\n\n' "$lessons" >>"$out"
   fi
 fi
 

@@ -24,6 +24,13 @@ Follow this every session. It is how this repo ships.
 - `NOTES.md` is Steven's. Read it. Never rewrite it.
 - `.claude/rules/cto.md` holds Steven's rules. Obey them. Append only when he
   asks you to add one.
+- `DESIGN.md` + `design/board/` are Steven's references — look before you
+  design anything visual.
+
+## Lessons
+
+When something bites you or you learn a convention, record it: `/lesson <one
+line>`. Builds read these first.
 
 ## Before you report status
 
