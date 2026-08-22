@@ -18,6 +18,9 @@ Follow this every session. It is how this repo ships.
 - `STATE.md` is the shared memory. Keep it current AS YOU WORK — move items
   between "In progress", "Staged (not shipped)", "Shipped", "Blocked". A
   session that ends without updating it has thrown its context away.
+- `PLAN.md`, when it exists, is the map: gates as `## ` headings, steps as
+  `- [ ]` checkboxes. When Steven approves a plan in conversation, write it
+  there. Tick a step the moment it is done, not at the end.
 - `NOTES.md` is Steven's. Read it. Never rewrite it.
 - `.claude/rules/cto.md` holds Steven's rules. Obey them. Append only when he
   asks you to add one.

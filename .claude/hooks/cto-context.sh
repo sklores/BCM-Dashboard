@@ -82,6 +82,24 @@ section "STATE.md — where the work is" "STATE.md"
 section "NOTES.md — Steven's notes (read, never rewrite)" "NOTES.md"
 section "Steven's rules — .claude/rules/cto.md" ".claude/rules/cto.md"
 
+# THE MAP, ONE LINE OF IT (Gate 2). PLAN.md can be long; a session only needs
+# to know which step is next and which gate it belongs to. The first
+# unchecked "- [ ]" and the "## " heading above it — nothing else.
+plan=$(show "PLAN.md")
+if [ -n "$plan" ]; then
+  here=$(printf '%s\n' "$plan" | awk '
+    /^##[ \t]/ { heading = $0; next }
+    !found && /^[ \t]*[-*][ \t]+\[[ ]\]/ {
+      if (heading != "") print heading
+      print $0
+      found = 1
+    }
+  ')
+  if [ -n "$here" ]; then
+    printf '## Plan — you are here\n%s\n\n' "$here" >>"$out"
+  fi
+fi
+
 if [ "$have_git" = yes ] && has_ref origin/staging && has_ref origin/main; then
   staged=$(git log --oneline origin/main..origin/staging 2>/dev/null | head -15)
   if [ -n "$staged" ]; then
